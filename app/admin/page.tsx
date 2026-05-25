@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
@@ -29,7 +30,16 @@ export default async function AdminPage() {
         <CardTitle>Welcome, {user.email}.</CardTitle>
         <CardDescription>You are an authenticated user.</CardDescription>
       </CardHeader>
-      <CardContent />
+      <CardContent className="text-sm">
+        <p className="text-muted-foreground">
+          Diagnostics:{" "}
+          <Link href="/admin/db-check" className="underline">
+            /admin/db-check
+          </Link>{" "}
+          — verifies every Prisma model is queryable and the storage bucket is
+          reachable.
+        </p>
+      </CardContent>
     </Card>
   );
 }

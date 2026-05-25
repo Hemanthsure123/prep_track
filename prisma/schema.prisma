@@ -8,22 +8,286 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ============ ENUMS ============
+
 enum UserRole {
   ADMIN
   PANELIST
   STUDENT
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      UserRole @default(STUDENT)
-  createdAt DateTime @default(now())
+enum RoleLevel {
+  INTERN
+  SDE_1
+  SDE_2
+  SDE_3
+  FRONTEND_INTERN
+  FRONTEND_SDE
+  BACKEND_INTERN
+  BACKEND_SDE
+  FULLSTACK
+  DATA_ENGINEER
+  ML_ENGINEER
+  OTHER
 }
 
-model HealthCheck {
-  id        String   @id @default(cuid())
-  label     String
-  createdAt DateTime @default(now())
+enum Branch {
+  CSE
+  IT
+  ECE
+  EEE
+  MECH
+  CIVIL
+  CHEM
+  AI_ML
+  OTHER
+}
+
+enum Season {
+  SUMMER
+  WINTER
+  OFF_CYCLE
+}
+
+enum InterviewMode {
+  ONLINE
+  OFFLINE
+  ON_PAPER
+  GOOGLE_DOCS
+  CODING_PLATFORM
+  HYBRID
+}
+
+enum RoundType {
+  ONLINE_ASSESSMENT
+  TECHNICAL_1
+  TECHNICAL_2
+  TECHNICAL_3
+  SYSTEM_DESIGN
+  MANAGERIAL
+  HR
+  DIRECTOR
+  BEHAVIORAL
+  CODING_ROUND
+  OTHER
+}
+
+enum RoundOutcome {
+  CLEARED
+  REJECTED
+  PENDING
+  NO_SHOW
+}
+
+enum FinalOutcome {
+  SELECTED
+  REJECTED
+  WAITLISTED
+  WITHDREW
+  IN_PROCESS
+}
+
+enum QuestionCategory {
+  DSA
+  FRONTEND
+  BACKEND
+  DBMS
+  OPERATING_SYSTEMS
+  NETWORKING
+  SYSTEM_DESIGN
+  OOPS
+  CORE_CS
+  AI_ML
+  APTITUDE
+  BEHAVIORAL
+  SCENARIO
+  PROJECT_DISCUSSION
+  LINUX
+  COMMUNICATION
+  OTHER
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum SolvedStatus {
+  SOLVED
+  PARTIAL
+  NOT_SOLVED
+  RAN_OUT_OF_TIME
+  SKIPPED
+}
+
+// ============ CORE ============
+
+model Company {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  slug        String      @unique
+  logoUrl     String?
+  websiteUrl  String?
+  description String?
+  createdAt   DateTime    @default(now())
+  interviews  Interview[]
+
+  @@index([slug])
+}
+
+model Interview {
+  id                  String       @id @default(cuid())
+  company             Company      @relation(fields: [companyId], references: [id])
+  companyId           String
+  role                String
+  roleLevel           RoleLevel
+  year                Int
+  season              Season
+  isOnCampus          Boolean
+  source              String?
+  cgpaCutoff          Float?
+  totalSelected       Int?
+
+  // Candidate profile (captured now, exposed in UI later via feature flag)
+  candidateCgpa       Float?
+  candidateBranch     Branch?
+  candidateGradYear   Int?
+  candidateBackground String?
+
+  finalOutcome        FinalOutcome
+  biggestTip          String?
+  publishedAt         DateTime     @default(now())
+
+  createdBy           User         @relation(fields: [createdById], references: [id])
+  createdById         String
+
+  rounds              Round[]
+  assets              Asset[]
+  bookmarks           Bookmark[]
+
+  @@index([companyId, roleLevel, year])
+  @@index([roleLevel])
+  @@index([year])
+  @@index([publishedAt])
+}
+
+model Round {
+  id              String        @id @default(cuid())
+  interview       Interview     @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewId     String
+  roundNumber     Int
+  roundName       String
+  roundType       RoundType
+  durationMinutes Int?
+  mode            InterviewMode
+  numInterviewers Int?
+  interviewStyle  String?
+  outcome         RoundOutcome
+  keyLearnings    String?
+
+  questions       Question[]
+  assets          Asset[]
+
+  @@index([interviewId, roundNumber])
+  @@index([roundType])
+}
+
+model Question {
+  id           String           @id @default(cuid())
+  round        Round            @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  roundId      String
+  orderIndex   Int
+  title        String
+  statement    String
+  category     QuestionCategory
+  difficulty   Difficulty
+  approach     String?
+  timeGivenMin Int?
+  timeTakenMin Int?
+  solvedStatus SolvedStatus?
+  followUps    String[]
+  referenceUrl String?
+
+  topics       QuestionTopic[]
+
+  @@index([roundId, orderIndex])
+  @@index([category, difficulty])
+}
+
+// ============ TAXONOMY ============
+
+model Topic {
+  id        String           @id @default(cuid())
+  name      String
+  slug      String           @unique
+  category  QuestionCategory
+  questions QuestionTopic[]
+
+  @@unique([name, category])
+  @@index([category])
+}
+
+model QuestionTopic {
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId String
+  topic      Topic    @relation(fields: [topicId], references: [id])
+  topicId    String
+
+  @@id([questionId, topicId])
+  @@index([topicId])
+}
+
+// ============ ASSETS ============
+
+model Asset {
+  id          String     @id @default(cuid())
+  interview   Interview? @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewId String?
+  round       Round?     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  roundId     String?
+  kind        String     // "prep_pdf" | "infographic_pdf" | "external_link"
+  url         String
+  label       String?
+  uploadedAt  DateTime   @default(now())
+
+  @@index([interviewId])
+  @@index([roundId])
+}
+
+// ============ USERS ============
+
+model User {
+  id         String      @id @default(cuid())
+  email      String      @unique
+  name       String?
+  role       UserRole    @default(STUDENT)
+  branch     Branch?
+  cgpa       Float?
+  gradYear   Int?
+  createdAt  DateTime    @default(now())
+
+  interviews Interview[]
+  bookmarks  Bookmark[]
+}
+
+model Bookmark {
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewId String
+
+  createdAt   DateTime  @default(now())
+
+  @@id([userId, interviewId])
+  @@index([interviewId])
+}
+
+// ============ FEATURE FLAGS ============
+
+model FeatureFlag {
+  key         String   @id
+  enabled     Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt
 }
