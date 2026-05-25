@@ -2,7 +2,7 @@
 
 EdTech platform that catalogs interview experiences from companies (Adobe, Google, Samsung, …), presents them to students as visually rich infographic pages, and provides an internal team with analytics dashboards.
 
-**Status:** Steps 1 & 2 complete. The foundation is wired (Next.js + Prisma + Supabase + email/password auth) and the full data layer is in place — every model migrated, taxonomy seeded, storage bucket provisioned, Zod schemas mirror every Prisma model, and a diagnostic page at `/admin/db-check` proves it all works. The submission wizard and student-facing UI land in Step 3.
+**Status:** Steps 1 / 2 / 3 complete. The foundation is wired (Next.js + Prisma + Supabase + email/password auth), the full data layer is in place (every model migrated, taxonomy seeded, storage bucket provisioned, Zod schemas mirroring every Prisma model, diagnostic page at `/admin/db-check`), and the admin submission wizard at `/admin/interviews/new` captures and atomically persists a full interview tree. The student-facing infographic page lands in Step 4.
 
 ## Tech stack
 
@@ -81,6 +81,42 @@ The full schema is defined in [`prisma/schema.prisma`](prisma/schema.prisma): th
 
 **Diagnostic page:** [`/admin/db-check`](app/admin/db-check/page.tsx) is the canonical "is everything wired?" page. Auth-required. Reads from every model, lists topics-by-category with sample names, dumps companies and feature flags, prints the logged-in user's Prisma row, shows zeroes for the still-empty fact tables, and calls Supabase Storage `listBuckets()` to confirm `assets` exists.
 
+## Admin workflow
+
+The submission wizard at [`/admin/interviews/new`](app/admin/interviews/new/page.tsx) captures a full interview process (metadata → rounds → questions → assets) and persists it atomically. Auth-required and role-guarded: only users with `role = ADMIN` or `PANELIST` in the Prisma `User` table can create / edit / delete. Students hit a redirect.
+
+| You want to…                                | Where to go                                                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------ |
+| See every interview                         | [`/admin/interviews`](app/admin/interviews/page.tsx) (paginated 25/page)             |
+| Create a new interview                      | [`/admin/interviews/new`](app/admin/interviews/new/page.tsx) (4-step wizard)         |
+| Read the full nested tree of one interview  | `/admin/interviews/[id]`                                                             |
+| Replace an existing interview               | `/admin/interviews/[id]/edit`                                                        |
+| Delete an interview (cascades + storage)    | The "Delete" button on the list or detail page (confirmation dialog)                 |
+
+**Promote yourself to PANELIST or ADMIN.** New signups land as `STUDENT`. Either open `npx prisma studio` and edit your `User.role`, or run:
+
+```bash
+echo "UPDATE \"User\" SET role = 'ADMIN' WHERE email = 'YOU@example.com';" \
+  | npx prisma db execute --stdin --schema prisma/schema.prisma
+```
+
+**The wizard, in four steps:**
+
+1. **Metadata** — company picker (autocomplete; type a new name to create on submit), role + level + year + season + on/off-campus, optional source / CGPA cutoff / total selected, candidate profile (CGPA, branch, grad year, background), final outcome, biggest tip.
+2. **Rounds** — add cards with up/down arrows to reorder. Round numbers renumber automatically. Each card collects name, type, duration, mode, # interviewers, style, outcome, key learnings.
+3. **Questions** — for each round, add questions. Title + statement + category + difficulty are required. **Topic options are filtered by the chosen category** (Topic table → `category` column). Changing category clears prior topic selections (with a toast). Per-question approach / time given / time taken / solved status / follow-ups / reference URL are optional.
+4. **Assets & review** — upload an optional interview-level PDF/DOCX and optional per-round PDF/DOCX (10 MB cap, uploads to Supabase Storage immediately). Add external links (LeetCode lists, blog writeups). Preview the full payload, then submit.
+
+The wizard runs on one React Hook Form instance; navigation is gated per step via Zod `trigger()`. In create mode, the form autosaves to `localStorage['interview-draft-v1']` every 800ms and restores on reload. "Discard draft" clears it.
+
+Submission goes through one of two Server Actions in [`app/_actions/interview.ts`](app/_actions/interview.ts):
+
+- `createFullInterview(payload)` — auth-guards, Zod-validates, then writes the entire `Interview → Round → Question → QuestionTopic + Asset` tree in a single `prisma.$transaction` via the pure helper `lib/interview/write.ts#createInterviewTree`. New companies are upserted inside the same transaction.
+- `updateFullInterview(id, payload)` — same guards, but uses `replaceInterviewTree`: deletes existing rounds (cascade kills questions + topic joins + round-level assets) and interview-level assets, updates the interview row in place, recreates everything from the new payload. Then, **after the transaction commits**, orphaned storage objects are deleted best-effort.
+- `deleteInterview(id)` — collects asset URLs, deletes the row (cascade), then deletes storage objects.
+
+The transactional logic is exercised by [`scripts/test-create.ts`](scripts/test-create.ts) — run `npx tsx scripts/test-create.ts` to validate create → replace → delete end-to-end without going through the UI.
+
 ## Verification (local)
 
 1. **DB diagnostic** — sign up, log in, visit <http://localhost:3000/admin/db-check>. Topics ≈ 144, Companies = 10, Feature flags = 3, `assets` bucket status: OK.
@@ -117,31 +153,39 @@ If you add migrations later, run `npx prisma migrate deploy` against your produc
 ```
 app/
 ├── (auth)/
-│   ├── login/         # /login — email/password form (Suspense-wrapped for useSearchParams)
-│   └── signup/        # /signup — creates Supabase user + Prisma profile
-├── admin/             # /admin — protected route, server-component layout
-│   └── db-check/      # /admin/db-check — diagnostic page reading every model
-├── _actions/          # Server actions (createUserProfile, signOut)
+│   ├── login/                # /login — email/password form (Suspense-wrapped for useSearchParams)
+│   └── signup/               # /signup — creates Supabase user + Prisma profile
+├── admin/                    # protected routes
+│   ├── db-check/             # /admin/db-check — diagnostic page reading every model
+│   └── interviews/           # /admin/interviews — list / new / [id] / [id]/edit
+├── _actions/                 # Server actions (createUserProfile, signOut, interview CRUD, asset upload)
 ├── layout.tsx
-└── page.tsx           # Landing
-components/ui/         # shadcn/ui primitives (button, card, input, label, form, sonner)
+└── page.tsx                  # Landing
+components/
+├── MarkdownRenderer.tsx      # server-only unified pipeline: remark-parse + remark-gfm + remark-rehype + rehype-sanitize + @shikijs/rehype + rehype-stringify
+├── forms/wizard/             # 4-step submission wizard (client; one RHF instance)
+└── ui/                       # shadcn/ui primitives (mostly @base-ui/react under the hood)
 lib/
-├── db.ts              # Prisma client singleton
-├── slug.ts            # slugify() helper
-├── storage.ts         # uploadAsset / getPublicUrl / deleteAsset (Supabase Storage)
-├── utils.ts           # cn() helper
-├── supabase/          # @supabase/ssr helpers (client / server / middleware)
-└── validations/       # Zod schemas mirroring every Prisma model + composite wizard schema
+├── auth/                     # requireAdminOrPanelist() + Unauthorized/Forbidden errors
+├── db.ts                     # Prisma client singleton
+├── interview/                # createInterviewTree / replaceInterviewTree — pure transaction helpers
+├── slug.ts                   # slugify() helper
+├── storage.ts                # uploadAsset / getPublicUrl / deleteAsset (Supabase Storage)
+├── utils.ts                  # cn() helper
+├── supabase/                 # @supabase/ssr helpers (client / server / middleware)
+└── validations/              # Zod schemas mirroring every Prisma model + composite wizard schema
 prisma/
-├── schema.prisma      # Full data model: enums + Company / Interview / Round / Question / Topic / QuestionTopic / Asset / User / Bookmark / FeatureFlag
-├── migrations/        # Prisma migration history
-└── seed.ts            # Idempotent seed: 144 topics, 10 companies, 3 feature flags
+├── schema.prisma             # Full data model
+├── migrations/               # Prisma migration history
+└── seed.ts                   # Idempotent seed: 144 topics, 10 companies, 3 feature flags
+scripts/
+└── test-create.ts            # End-to-end create/replace/delete cycle through the pure helper
 supabase/
 └── migrations/
-    └── 0001_storage.sql   # assets bucket + RLS policies
-middleware.ts          # Refreshes session, guards /admin/*
+    └── 0001_storage.sql      # assets bucket + RLS policies
+middleware.ts                 # Refreshes session, guards /admin/*
 ```
 
 ## Roadmap
 
-Steps 1 & 2 are done. Step 3 builds the admin submission wizard (the biggest feature build). Future work: infographic pages, student catalog, analytics dashboards, taxonomy management UI, Google OAuth, Cloudflare CDN, Sentry/PostHog/Resend integrations.
+Steps 1 / 2 / 3 are done. Step 4 builds the student-facing infographic page (the visual showpiece). Future work: public catalog & company pages, analytics dashboards, taxonomy management UI, Google OAuth, Cloudflare CDN, Sentry/PostHog/Resend integrations.

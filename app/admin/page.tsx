@@ -30,7 +30,13 @@ export default async function AdminPage() {
         <CardTitle>Welcome, {user.email}.</CardTitle>
         <CardDescription>You are an authenticated user.</CardDescription>
       </CardHeader>
-      <CardContent className="text-sm">
+      <CardContent className="space-y-2 text-sm">
+        <p>
+          <Link href="/admin/interviews" className="underline">
+            /admin/interviews
+          </Link>{" "}
+          — list, create, edit, and delete interviews.
+        </p>
         <p className="text-muted-foreground">
           Diagnostics:{" "}
           <Link href="/admin/db-check" className="underline">

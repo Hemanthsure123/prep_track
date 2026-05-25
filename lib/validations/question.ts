@@ -14,7 +14,7 @@ export const questionCreateSchema = z.object({
   timeGivenMin: z.number().int().min(0).max(24 * 60).nullish(),
   timeTakenMin: z.number().int().min(0).max(24 * 60).nullish(),
   solvedStatus: z.nativeEnum(SolvedStatus).nullish(),
-  followUps: z.array(z.string().trim().min(1).max(1000)).default([]),
+  followUps: z.array(z.string().trim().min(1).max(1000)),
   referenceUrl: z.string().url().nullish(),
   topicIds: z
     .array(z.string().min(1))
