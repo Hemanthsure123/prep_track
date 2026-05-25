@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# editor / agent state
+.claude/
+.idea/
+.vscode/
+*.log
+
+# prisma
+/prisma/migrations/*/migration_lock.toml.bak
