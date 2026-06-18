@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
-import { ForbiddenError, requireAdminOrPanelist } from "@/lib/auth/guards";
+import { ForbiddenError, UnauthorizedError, requireAdminOrPanelist } from "@/lib/auth/guards";
 
 import { NewInterviewClient } from "./new-interview-client";
 
@@ -22,18 +22,27 @@ export default async function NewInterviewPage() {
   try {
     await requireAdminOrPanelist();
   } catch (err) {
-    if (err instanceof ForbiddenError) redirect("/admin");
+    if (err instanceof ForbiddenError) redirect("/");
+    if (err instanceof UnauthorizedError) redirect("/login");
     throw err;
   }
 
-  const [companies, topics] = await Promise.all([
+  const [companies, topicAreas, subTopics, roleLevels] = await Promise.all([
     prisma.company.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, slug: true },
     }),
-    prisma.topic.findMany({
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, slug: true, category: true },
+    prisma.topicArea.findMany({
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true, slug: true, sortOrder: true },
+    }),
+    prisma.subTopic.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true, topicAreaId: true },
+    }),
+    prisma.roleLevel.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true },
     }),
   ]);
 
@@ -45,7 +54,12 @@ export default async function NewInterviewPage() {
           Capture a full interview process. Drafts autosave to your browser.
         </p>
       </header>
-      <NewInterviewClient companies={companies} topics={topics} />
+      <NewInterviewClient
+        companies={companies}
+        topicAreas={topicAreas}
+        subTopics={subTopics}
+        roleLevels={roleLevels}
+      />
     </div>
   );
 }

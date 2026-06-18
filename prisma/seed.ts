@@ -1,183 +1,200 @@
-import { PrismaClient, QuestionCategory } from "@prisma/client";
-
+import { PrismaClient } from "@prisma/client";
 import { slugify } from "../lib/slug";
 
 const prisma = new PrismaClient();
 
-const TOPICS: Array<{ name: string; category: QuestionCategory }> = [
-  // DSA
-  { name: "Arrays", category: "DSA" },
-  { name: "Strings", category: "DSA" },
-  { name: "Linked List", category: "DSA" },
-  { name: "Stack", category: "DSA" },
-  { name: "Queue", category: "DSA" },
-  { name: "Hashing", category: "DSA" },
-  { name: "Trees", category: "DSA" },
-  { name: "Binary Search Trees", category: "DSA" },
-  { name: "Tries", category: "DSA" },
-  { name: "Graphs", category: "DSA" },
-  { name: "Dynamic Programming", category: "DSA" },
-  { name: "Greedy", category: "DSA" },
-  { name: "Backtracking", category: "DSA" },
-  { name: "Recursion", category: "DSA" },
-  { name: "Sliding Window", category: "DSA" },
-  { name: "Two Pointers", category: "DSA" },
-  { name: "Binary Search", category: "DSA" },
-  { name: "Sorting", category: "DSA" },
-  { name: "Heap / Priority Queue", category: "DSA" },
-  { name: "Bit Manipulation", category: "DSA" },
-  { name: "Math", category: "DSA" },
-  { name: "Matrix", category: "DSA" },
-  { name: "Intervals", category: "DSA" },
+const TOPIC_AREAS = [
+  { name: "DSA Easy",                     sortOrder: 10 },
+  { name: "DSA Medium-Hard",              sortOrder: 20 },
+  { name: "Frontend Concepts",            sortOrder: 30 },
+  { name: "Frontend Coding",              sortOrder: 40 },
+  { name: "Backend Concepts",             sortOrder: 50 },
+  { name: "Backend Coding",               sortOrder: 60 },
+  { name: "DBMS",                         sortOrder: 70 },
+  { name: "AI / ML / GenAI / Agents",     sortOrder: 80 },
+  { name: "System Design",                sortOrder: 90 },
+  { name: "OOPs",                         sortOrder: 100 },
+  { name: "Core CS",                      sortOrder: 110 },
+  { name: "Operating Systems",            sortOrder: 120 },
+  { name: "Linux",                        sortOrder: 130 },
+  { name: "Communication Skills",         sortOrder: 140 },
+  { name: "Scenario / Situational",       sortOrder: 150 },
+];
 
-  // FRONTEND
-  { name: "React", category: "FRONTEND" },
-  { name: "Next.js", category: "FRONTEND" },
-  { name: "Vue", category: "FRONTEND" },
-  { name: "Angular", category: "FRONTEND" },
-  { name: "JavaScript Core", category: "FRONTEND" },
-  { name: "TypeScript", category: "FRONTEND" },
-  { name: "HTML", category: "FRONTEND" },
-  { name: "CSS", category: "FRONTEND" },
-  { name: "Tailwind", category: "FRONTEND" },
-  { name: "Browser Rendering", category: "FRONTEND" },
-  { name: "Performance", category: "FRONTEND" },
-  { name: "Accessibility", category: "FRONTEND" },
-  { name: "State Management", category: "FRONTEND" },
-  { name: "Testing", category: "FRONTEND" },
-  { name: "Web APIs", category: "FRONTEND" },
-  { name: "Build Tools", category: "FRONTEND" },
-  { name: "Cross-Browser Compatibility", category: "FRONTEND" },
-  { name: "Responsive Design", category: "FRONTEND" },
+const SUB_TOPICS: Array<{ name: string; area: string }> = [
+  // DSA (mapped to DSA Medium-Hard)
+  { name: "Arrays", area: "DSA Medium-Hard" },
+  { name: "Strings", area: "DSA Medium-Hard" },
+  { name: "Linked List", area: "DSA Medium-Hard" },
+  { name: "Stack", area: "DSA Medium-Hard" },
+  { name: "Queue", area: "DSA Medium-Hard" },
+  { name: "Hashing", area: "DSA Medium-Hard" },
+  { name: "Trees", area: "DSA Medium-Hard" },
+  { name: "Binary Search Trees", area: "DSA Medium-Hard" },
+  { name: "Tries", area: "DSA Medium-Hard" },
+  { name: "Graphs", area: "DSA Medium-Hard" },
+  { name: "Dynamic Programming", area: "DSA Medium-Hard" },
+  { name: "Greedy", area: "DSA Medium-Hard" },
+  { name: "Backtracking", area: "DSA Medium-Hard" },
+  { name: "Recursion", area: "DSA Medium-Hard" },
+  { name: "Sliding Window", area: "DSA Medium-Hard" },
+  { name: "Two Pointers", area: "DSA Medium-Hard" },
+  { name: "Binary Search", area: "DSA Medium-Hard" },
+  { name: "Sorting", area: "DSA Medium-Hard" },
+  { name: "Heap / Priority Queue", area: "DSA Medium-Hard" },
+  { name: "Bit Manipulation", area: "DSA Medium-Hard" },
+  { name: "Math", area: "DSA Medium-Hard" },
+  { name: "Matrix", area: "DSA Medium-Hard" },
+  { name: "Intervals", area: "DSA Medium-Hard" },
 
-  // BACKEND
-  { name: "Node.js", category: "BACKEND" },
-  { name: "Express", category: "BACKEND" },
-  { name: "Spring", category: "BACKEND" },
-  { name: "Django", category: "BACKEND" },
-  { name: "Flask", category: "BACKEND" },
-  { name: "REST APIs", category: "BACKEND" },
-  { name: "GraphQL", category: "BACKEND" },
-  { name: "Authentication", category: "BACKEND" },
-  { name: "Authorization", category: "BACKEND" },
-  { name: "Caching", category: "BACKEND" },
-  { name: "Message Queues", category: "BACKEND" },
-  { name: "Microservices", category: "BACKEND" },
-  { name: "Monolith", category: "BACKEND" },
-  { name: "API Design", category: "BACKEND" },
-  { name: "Rate Limiting", category: "BACKEND" },
+  // FRONTEND (React, etc. to Frontend Concepts)
+  { name: "React", area: "Frontend Concepts" },
+  { name: "Next.js", area: "Frontend Concepts" },
+  { name: "Vue", area: "Frontend Concepts" },
+  { name: "Angular", area: "Frontend Concepts" },
+  { name: "JavaScript Core", area: "Frontend Concepts" },
+  { name: "TypeScript", area: "Frontend Concepts" },
+  { name: "HTML", area: "Frontend Concepts" },
+  { name: "CSS", area: "Frontend Concepts" },
+  { name: "Tailwind", area: "Frontend Concepts" },
+  { name: "Browser Rendering", area: "Frontend Concepts" },
+  { name: "Performance", area: "Frontend Concepts" },
+  { name: "Accessibility", area: "Frontend Concepts" },
+  { name: "State Management", area: "Frontend Concepts" },
+  { name: "Testing", area: "Frontend Concepts" },
+  { name: "Web APIs", area: "Frontend Concepts" },
+  { name: "Build Tools", area: "Frontend Concepts" },
+  { name: "Cross-Browser Compatibility", area: "Frontend Concepts" },
+  { name: "Responsive Design", area: "Frontend Concepts" },
 
-  // DBMS
-  { name: "SQL", category: "DBMS" },
-  { name: "NoSQL", category: "DBMS" },
-  { name: "Indexing", category: "DBMS" },
-  { name: "Normalization", category: "DBMS" },
-  { name: "Transactions", category: "DBMS" },
-  { name: "ACID", category: "DBMS" },
-  { name: "Joins", category: "DBMS" },
-  { name: "Query Optimization", category: "DBMS" },
-  { name: "Sharding", category: "DBMS" },
-  { name: "Replication", category: "DBMS" },
-  { name: "MongoDB", category: "DBMS" },
-  { name: "Redis", category: "DBMS" },
-  { name: "PostgreSQL", category: "DBMS" },
-  { name: "MySQL", category: "DBMS" },
+  // BACKEND (to Backend Concepts)
+  { name: "Node.js", area: "Backend Concepts" },
+  { name: "Express", area: "Backend Concepts" },
+  { name: "Spring", area: "Backend Concepts" },
+  { name: "Django", area: "Backend Concepts" },
+  { name: "Flask", area: "Backend Concepts" },
+  { name: "REST APIs", area: "Backend Concepts" },
+  { name: "GraphQL", area: "Backend Concepts" },
+  { name: "Authentication", area: "Backend Concepts" },
+  { name: "Authorization", area: "Backend Concepts" },
+  { name: "Caching", area: "Backend Concepts" },
+  { name: "Message Queues", area: "Backend Concepts" },
+  { name: "Microservices", area: "Backend Concepts" },
+  { name: "Monolith", area: "Backend Concepts" },
+  { name: "API Design", area: "Backend Concepts" },
+  { name: "Rate Limiting", area: "Backend Concepts" },
 
-  // OPERATING_SYSTEMS
-  { name: "Processes", category: "OPERATING_SYSTEMS" },
-  { name: "Threads", category: "OPERATING_SYSTEMS" },
-  { name: "Concurrency", category: "OPERATING_SYSTEMS" },
-  { name: "Deadlocks", category: "OPERATING_SYSTEMS" },
-  { name: "Scheduling", category: "OPERATING_SYSTEMS" },
-  { name: "Memory Management", category: "OPERATING_SYSTEMS" },
-  { name: "Virtual Memory", category: "OPERATING_SYSTEMS" },
-  { name: "Paging", category: "OPERATING_SYSTEMS" },
-  { name: "File Systems", category: "OPERATING_SYSTEMS" },
-  { name: "IPC", category: "OPERATING_SYSTEMS" },
+  // DBMS (to DBMS)
+  { name: "SQL", area: "DBMS" },
+  { name: "NoSQL", area: "DBMS" },
+  { name: "Indexing", area: "DBMS" },
+  { name: "Normalization", area: "DBMS" },
+  { name: "Transactions", area: "DBMS" },
+  { name: "ACID", area: "DBMS" },
+  { name: "Joins", area: "DBMS" },
+  { name: "Query Optimization", area: "DBMS" },
+  { name: "Sharding", area: "DBMS" },
+  { name: "Replication", area: "DBMS" },
+  { name: "MongoDB", area: "DBMS" },
+  { name: "Redis", area: "DBMS" },
+  { name: "PostgreSQL", area: "DBMS" },
+  { name: "MySQL", area: "DBMS" },
 
-  // NETWORKING
-  { name: "TCP/IP", category: "NETWORKING" },
-  { name: "HTTP", category: "NETWORKING" },
-  { name: "HTTPS", category: "NETWORKING" },
-  { name: "DNS", category: "NETWORKING" },
-  { name: "Load Balancing", category: "NETWORKING" },
-  { name: "CDN", category: "NETWORKING" },
-  { name: "WebSockets", category: "NETWORKING" },
-  { name: "OSI Model", category: "NETWORKING" },
+  // OPERATING_SYSTEMS (to Operating Systems)
+  { name: "Processes", area: "Operating Systems" },
+  { name: "Threads", area: "Operating Systems" },
+  { name: "Concurrency", area: "Operating Systems" },
+  { name: "Deadlocks", area: "Operating Systems" },
+  { name: "Scheduling", area: "Operating Systems" },
+  { name: "Memory Management", area: "Operating Systems" },
+  { name: "Virtual Memory", area: "Operating Systems" },
+  { name: "Paging", area: "Operating Systems" },
+  { name: "File Systems", area: "Operating Systems" },
+  { name: "IPC", area: "Operating Systems" },
 
-  // SYSTEM_DESIGN
-  { name: "Scalability", category: "SYSTEM_DESIGN" },
-  { name: "Load Balancing", category: "SYSTEM_DESIGN" },
-  { name: "Caching Strategy", category: "SYSTEM_DESIGN" },
-  { name: "Database Design", category: "SYSTEM_DESIGN" },
-  { name: "Microservices Architecture", category: "SYSTEM_DESIGN" },
-  { name: "Event-Driven Architecture", category: "SYSTEM_DESIGN" },
-  { name: "CAP Theorem", category: "SYSTEM_DESIGN" },
-  { name: "Consistency Models", category: "SYSTEM_DESIGN" },
-  { name: "Sharding Strategies", category: "SYSTEM_DESIGN" },
-  { name: "Rate Limiting Design", category: "SYSTEM_DESIGN" },
-  { name: "URL Shortener", category: "SYSTEM_DESIGN" },
-  { name: "Chat Application", category: "SYSTEM_DESIGN" },
-  { name: "News Feed", category: "SYSTEM_DESIGN" },
-  { name: "Time Machine / Versioning", category: "SYSTEM_DESIGN" },
+  // NETWORKING (to Core CS)
+  { name: "TCP/IP", area: "Core CS" },
+  { name: "HTTP", area: "Core CS" },
+  { name: "HTTPS", area: "Core CS" },
+  { name: "DNS", area: "Core CS" },
+  { name: "Load Balancing", area: "Core CS" },
+  { name: "CDN", area: "Core CS" },
+  { name: "WebSockets", area: "Core CS" },
+  { name: "OSI Model", area: "Core CS" },
 
-  // OOPS
-  { name: "Inheritance", category: "OOPS" },
-  { name: "Polymorphism", category: "OOPS" },
-  { name: "Encapsulation", category: "OOPS" },
-  { name: "Abstraction", category: "OOPS" },
-  { name: "SOLID Principles", category: "OOPS" },
-  { name: "Design Patterns", category: "OOPS" },
-  { name: "Composition", category: "OOPS" },
-  { name: "Interfaces", category: "OOPS" },
+  // SYSTEM_DESIGN (to System Design)
+  { name: "Scalability", area: "System Design" },
+  { name: "Load Balancing", area: "System Design" },
+  { name: "Caching Strategy", area: "System Design" },
+  { name: "Database Design", area: "System Design" },
+  { name: "Microservices Architecture", area: "System Design" },
+  { name: "Event-Driven Architecture", area: "System Design" },
+  { name: "CAP Theorem", area: "System Design" },
+  { name: "Consistency Models", area: "System Design" },
+  { name: "Sharding Strategies", area: "System Design" },
+  { name: "Rate Limiting Design", area: "System Design" },
+  { name: "URL Shortener", area: "System Design" },
+  { name: "Chat Application", area: "System Design" },
+  { name: "News Feed", area: "System Design" },
+  { name: "Time Machine / Versioning", area: "System Design" },
 
-  // CORE_CS
-  { name: "Compilers", category: "CORE_CS" },
-  { name: "Computer Architecture", category: "CORE_CS" },
-  { name: "Number Systems", category: "CORE_CS" },
-  { name: "Boolean Logic", category: "CORE_CS" },
+  // OOPS (to OOPs)
+  { name: "Inheritance", area: "OOPs" },
+  { name: "Polymorphism", area: "OOPs" },
+  { name: "Encapsulation", area: "OOPs" },
+  { name: "Abstraction", area: "OOPs" },
+  { name: "SOLID Principles", area: "OOPs" },
+  { name: "Design Patterns", area: "OOPs" },
+  { name: "Composition", area: "OOPs" },
+  { name: "Interfaces", area: "OOPs" },
 
-  // AI_ML
-  { name: "Supervised Learning", category: "AI_ML" },
-  { name: "Unsupervised Learning", category: "AI_ML" },
-  { name: "Neural Networks", category: "AI_ML" },
-  { name: "NLP", category: "AI_ML" },
-  { name: "Computer Vision", category: "AI_ML" },
-  { name: "LLMs", category: "AI_ML" },
-  { name: "Prompt Engineering", category: "AI_ML" },
-  { name: "Agents", category: "AI_ML" },
-  { name: "RAG", category: "AI_ML" },
-  { name: "Fine-tuning", category: "AI_ML" },
-  { name: "Vector Databases", category: "AI_ML" },
+  // CORE_CS (to Core CS)
+  { name: "Compilers", area: "Core CS" },
+  { name: "Computer Architecture", area: "Core CS" },
+  { name: "Number Systems", area: "Core CS" },
+  { name: "Boolean Logic", area: "Core CS" },
 
-  // APTITUDE
-  { name: "Quantitative", category: "APTITUDE" },
-  { name: "Logical Reasoning", category: "APTITUDE" },
-  { name: "Verbal", category: "APTITUDE" },
-  { name: "Data Interpretation", category: "APTITUDE" },
+  // AI_ML (to AI / ML / GenAI / Agents)
+  { name: "Supervised Learning", area: "AI / ML / GenAI / Agents" },
+  { name: "Unsupervised Learning", area: "AI / ML / GenAI / Agents" },
+  { name: "Neural Networks", area: "AI / ML / GenAI / Agents" },
+  { name: "NLP", area: "AI / ML / GenAI / Agents" },
+  { name: "Computer Vision", area: "AI / ML / GenAI / Agents" },
+  { name: "LLMs", area: "AI / ML / GenAI / Agents" },
+  { name: "Prompt Engineering", area: "AI / ML / GenAI / Agents" },
+  { name: "Agents", area: "AI / ML / GenAI / Agents" },
+  { name: "RAG", area: "AI / ML / GenAI / Agents" },
+  { name: "Fine-tuning", area: "AI / ML / GenAI / Agents" },
+  { name: "Vector Databases", area: "AI / ML / GenAI / Agents" },
 
-  // BEHAVIORAL
-  { name: "Conflict Resolution", category: "BEHAVIORAL" },
-  { name: "Leadership", category: "BEHAVIORAL" },
-  { name: "Teamwork", category: "BEHAVIORAL" },
-  { name: "Failure Story", category: "BEHAVIORAL" },
-  { name: "Strengths and Weaknesses", category: "BEHAVIORAL" },
+  // APTITUDE (to Core CS)
+  { name: "Quantitative", area: "Core CS" },
+  { name: "Logical Reasoning", area: "Core CS" },
+  { name: "Verbal", area: "Core CS" },
+  { name: "Data Interpretation", area: "Core CS" },
 
-  // LINUX
-  { name: "Shell Commands", category: "LINUX" },
-  { name: "Bash Scripting", category: "LINUX" },
-  { name: "Permissions", category: "LINUX" },
-  { name: "Process Management", category: "LINUX" },
+  // BEHAVIORAL (to Communication Skills)
+  { name: "Conflict Resolution", area: "Communication Skills" },
+  { name: "Leadership", area: "Communication Skills" },
+  { name: "Teamwork", area: "Communication Skills" },
+  { name: "Failure Story", area: "Communication Skills" },
+  { name: "Strengths and Weaknesses", area: "Communication Skills" },
 
-  // SCENARIO
-  { name: "Debugging Scenario", category: "SCENARIO" },
-  { name: "System Failure Scenario", category: "SCENARIO" },
-  { name: "User Problem Scenario", category: "SCENARIO" },
+  // LINUX (to Linux)
+  { name: "Shell Commands", area: "Linux" },
+  { name: "Bash Scripting", area: "Linux" },
+  { name: "Permissions", area: "Linux" },
+  { name: "Process Management", area: "Linux" },
 
-  // COMMUNICATION
-  { name: "Verbal Clarity", category: "COMMUNICATION" },
-  { name: "Written Communication", category: "COMMUNICATION" },
-  { name: "Thinking Aloud", category: "COMMUNICATION" },
+  // SCENARIO (to Scenario / Situational)
+  { name: "Debugging Scenario", area: "Scenario / Situational" },
+  { name: "System Failure Scenario", area: "Scenario / Situational" },
+  { name: "User Problem Scenario", area: "Scenario / Situational" },
+
+  // COMMUNICATION (to Communication Skills)
+  { name: "Verbal Clarity", area: "Communication Skills" },
+  { name: "Written Communication", area: "Communication Skills" },
+  { name: "Thinking Aloud", area: "Communication Skills" },
 ];
 
 const COMPANIES: Array<{ name: string; slug: string }> = [
@@ -211,34 +228,31 @@ const FLAGS: Array<{ key: string; enabled: boolean; description: string }> = [
   },
 ];
 
-function computeTopicSlugs(
-  topics: ReadonlyArray<{ name: string; category: QuestionCategory }>,
-): Array<{ name: string; category: QuestionCategory; slug: string }> {
-  const used = new Set<string>();
-  return topics.map((t) => {
-    const base = slugify(t.name);
-    let slug = base;
-    if (used.has(slug)) {
-      slug = `${base}-${slugify(t.category)}`;
-    }
-    if (used.has(slug)) {
-      throw new Error(`Slug collision could not be resolved for ${t.name} (${t.category}).`);
-    }
-    used.add(slug);
-    return { ...t, slug };
-  });
-}
+const ROLE_LEVELS = [
+  "Intern",
+  "SDE-1",
+  "SDE-2",
+  "SDE-3",
+  "Frontend Intern",
+  "Frontend SDE",
+  "Backend Intern",
+  "Backend SDE",
+  "Fullstack",
+  "Data Engineer",
+  "ML Engineer",
+  "Other",
+];
 
-async function seedTopics() {
-  const rows = computeTopicSlugs(TOPICS);
-  for (const t of rows) {
-    await prisma.topic.upsert({
-      where: { name_category: { name: t.name, category: t.category } },
-      update: { slug: t.slug },
-      create: { name: t.name, category: t.category, slug: t.slug },
+async function seedRoleLevels() {
+  for (const name of ROLE_LEVELS) {
+    const slug = slugify(name);
+    await prisma.roleLevel.upsert({
+      where: { name },
+      update: {},
+      create: { name, slug },
     });
   }
-  return rows.length;
+  return ROLE_LEVELS.length;
 }
 
 async function seedCompanies() {
@@ -263,15 +277,56 @@ async function seedFlags() {
   return FLAGS.length;
 }
 
+async function seedTopicAreasAndSubTopics() {
+  const nameToIdMap = new Map<string, string>();
+
+  // 1. Seed Topic Areas
+  for (const ta of TOPIC_AREAS) {
+    const slug = slugify(ta.name);
+    const row = await prisma.topicArea.upsert({
+      where: { name: ta.name },
+      update: { sortOrder: ta.sortOrder },
+      create: { name: ta.name, slug, sortOrder: ta.sortOrder },
+    });
+    nameToIdMap.set(ta.name, row.id);
+  }
+
+  // 2. Seed Sub Topics
+  for (const st of SUB_TOPICS) {
+    const topicAreaId = nameToIdMap.get(st.area);
+    if (!topicAreaId) {
+      throw new Error(`TopicArea name not found in map: ${st.area}`);
+    }
+    const slug = slugify(st.name);
+    await prisma.subTopic.upsert({
+      where: {
+        name_topicAreaId: {
+          name: st.name,
+          topicAreaId,
+        },
+      },
+      update: { slug },
+      create: {
+        name: st.name,
+        slug,
+        topicAreaId,
+      },
+    });
+  }
+
+  return { areasCount: TOPIC_AREAS.length, subTopicsCount: SUB_TOPICS.length };
+}
+
 async function main() {
-  const [topics, companies, flags] = await Promise.all([
-    seedTopics(),
+  const [companies, flags, roleLevels, taxonomy] = await Promise.all([
     seedCompanies(),
     seedFlags(),
+    seedRoleLevels(),
+    seedTopicAreasAndSubTopics(),
   ]);
 
   process.stdout.write(
-    `Seeded ${topics} topics, ${companies} companies, ${flags} feature flags.\n`,
+    `Seeded ${taxonomy.areasCount} topic areas, ${taxonomy.subTopicsCount} sub-topics, ${companies} companies, ${flags} feature flags, ${roleLevels} role levels.\n`,
   );
 }
 

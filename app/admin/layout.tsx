@@ -3,25 +3,23 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/app/_actions/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentDbUser } from "@/lib/auth/guards";
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
+  const user = await getCurrentDbUser();
+  if (!user) redirect("/login?next=/admin");
+  if (user.role !== "ADMIN" && user.role !== "PANELIST") {
+    // Students don't see the admin area.
+    redirect("/dashboard");
   }
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b">
+      <header className="border-b border-border">
         <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4">
           <Link href="/admin" className="font-semibold">
             Interview Experience Platform

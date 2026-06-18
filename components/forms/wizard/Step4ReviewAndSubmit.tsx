@@ -22,24 +22,28 @@ import {
   deleteAssetAction,
   uploadAssetAction,
 } from "@/app/_actions/asset-upload";
+import { InlineSpinner } from "@/components/loading/InlineSpinner";
 import { cn } from "@/lib/utils";
 
 import { FieldHint } from "./FieldRow";
 import type {
   CompanyOption,
-  TopicOption,
+  TopicAreaOption,
+  SubTopicOption,
   WizardValues,
 } from "./types";
 
 export function Step4ReviewAndSubmit({
   companies,
-  topics,
+  topicAreas,
+  subTopics,
   submitting,
   submitLabel,
   onSubmit,
 }: {
   companies: CompanyOption[];
-  topics: TopicOption[];
+  topicAreas: TopicAreaOption[];
+  subTopics: SubTopicOption[];
   submitting: boolean;
   submitLabel: string;
   onSubmit: () => void | Promise<void>;
@@ -64,7 +68,12 @@ export function Step4ReviewAndSubmit({
 
       <Separator />
 
-      <Preview companies={companies} topics={topics} values={values} />
+      <Preview
+        companies={companies}
+        topicAreas={topicAreas}
+        subTopics={subTopics}
+        values={values}
+      />
 
       <div className="flex items-center justify-end">
         <Button
@@ -74,8 +83,10 @@ export function Step4ReviewAndSubmit({
         >
           {submitting ? (
             <>
-              <Loader2Icon className="size-4 animate-spin" />
-              Submitting…
+              <InlineSpinner className="mr-2" />
+              {submitLabel === "Save changes"
+                ? "Saving changes…"
+                : "Publishing interview…"}
             </>
           ) : (
             submitLabel
@@ -396,11 +407,13 @@ function FileUploadRow({
 
 function Preview({
   companies,
-  topics,
+  topicAreas,
+  subTopics,
   values,
 }: {
   companies: CompanyOption[];
-  topics: TopicOption[];
+  topicAreas: TopicAreaOption[];
+  subTopics: SubTopicOption[];
   values: WizardValues;
 }) {
   const cmp = values.company;
@@ -410,7 +423,8 @@ function Preview({
         "(unknown company)")
       : `${cmp.data.name} (new)`;
 
-  const topicNameById = new Map(topics.map((t) => [t.id, t.name]));
+  const topicAreaMap = new Map(topicAreas.map((ta) => [ta.id, ta.name]));
+  const subTopicMap = new Map(subTopics.map((st) => [st.id, st.name]));
 
   return (
     <section className="space-y-4">
@@ -421,24 +435,17 @@ function Preview({
             {company} · {values.interview.role || "(role)"}
           </CardTitle>
           <div className="flex flex-wrap gap-2 pt-2">
-            <Badge variant="outline">{values.interview.roleLevel}</Badge>
             <Badge variant="outline">
-              {values.interview.season} {values.interview.year}
-            </Badge>
-            <Badge
-              variant="outline"
-              className={cn(
-                values.interview.finalOutcome === "SELECTED" &&
-                  "border-emerald-300",
-                values.interview.finalOutcome === "REJECTED" &&
-                  "border-red-300",
-              )}
-            >
-              {values.interview.finalOutcome}
+              {values.interview.roleLevelName || "(no level name)"}
             </Badge>
             <Badge variant="outline">
-              {values.interview.isOnCampus ? "On-campus" : "Off-campus"}
+              Year: {values.interview.year}
             </Badge>
+            {values.interview.totalSelected != null && (
+              <Badge variant="outline">
+                Selected: {values.interview.totalSelected}
+              </Badge>
+            )}
           </div>
         </CardHeader>
         {values.interview.biggestTip ? (
@@ -467,52 +474,41 @@ function Preview({
                 <Badge variant="secondary">{r.outcome}</Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {r.questions.length === 0 ? (
+            <CardContent className="space-y-4 text-sm">
+              {r.topicCoverages.length === 0 ? (
                 <p className="text-muted-foreground italic">
-                  No questions in this round.
+                  No topic coverages in this round.
                 </p>
               ) : (
-                r.questions.map((q, qi) => (
-                  <div
-                    key={qi}
-                    className="rounded-md border p-2 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="font-mono">
-                        Q{qi + 1}
-                      </Badge>
-                      <span className="font-medium">
-                        {q.title || "(untitled)"}
-                      </span>
-                      <Badge variant="secondary">{q.category}</Badge>
-                      <Badge
-                        className={cn(
-                          q.difficulty === "EASY" &&
-                            "bg-emerald-100 text-emerald-700",
-                          q.difficulty === "MEDIUM" &&
-                            "bg-amber-100 text-amber-700",
-                          q.difficulty === "HARD" && "bg-red-100 text-red-700",
-                        )}
-                      >
-                        {q.difficulty}
-                      </Badge>
-                    </div>
-                    {q.topicIds.length > 0 ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {q.topicIds.map((id) => (
-                          <Badge
-                            key={id}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            {topicNameById.get(id) ?? id}
-                          </Badge>
-                        ))}
+                r.topicCoverages.map((cov, covIdx) => {
+                  const areaName = topicAreaMap.get(cov.topicAreaId) || "(unknown topic area)";
+                  return (
+                    <div key={covIdx} className="rounded-md border p-3 bg-slate-50 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-800">{areaName}</span>
+                        <Badge variant="outline">
+                          {cov.subTopicCount} sub-topic{cov.subTopicCount === 1 ? "" : "s"}
+                        </Badge>
                       </div>
-                    ) : null}
-                  </div>
-                ))
+                      {cov.entries.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {cov.entries.map((entry, entryIdx) => {
+                            let name = entry.subTopicName;
+                            if (!name && entry.subTopicId) {
+                              name = subTopicMap.get(entry.subTopicId) || entry.subTopicId;
+                            }
+                            return (
+                              <Badge key={entryIdx} variant="secondary" className="text-xs">
+                                {name || "(unnamed sub-topic)"}
+                                {entry.exactQuestionText && " (with Q)"}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </CardContent>
           </Card>

@@ -15,29 +15,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
-
 import { DeleteInterviewButton } from "../delete-button";
 
 export const dynamic = "force-dynamic";
 
-const OUTCOME_TONE: Record<string, string> = {
-  SELECTED: "bg-emerald-100 text-emerald-700",
-  REJECTED: "bg-red-100 text-red-700",
-  WAITLISTED: "bg-amber-100 text-amber-700",
-  WITHDREW: "bg-slate-100 text-slate-700",
-  IN_PROCESS: "bg-sky-100 text-sky-700",
-};
-
-const DIFFICULTY_TONE: Record<string, string> = {
-  EASY: "bg-emerald-100 text-emerald-700",
-  MEDIUM: "bg-amber-100 text-amber-700",
-  HARD: "bg-red-100 text-red-700",
-};
 
 const ROUND_OUTCOME_TONE: Record<string, string> = {
   CLEARED: "bg-emerald-100 text-emerald-700",
@@ -63,17 +48,22 @@ export default async function AdminInterviewDetailPage({
     where: { id },
     include: {
       company: true,
+      roleLevel: true,
       createdBy: { select: { email: true, name: true } },
       assets: { orderBy: { uploadedAt: "asc" } },
       rounds: {
         orderBy: { roundNumber: "asc" },
         include: {
           assets: { orderBy: { uploadedAt: "asc" } },
-          questions: {
+          topicCoverages: {
             orderBy: { orderIndex: "asc" },
             include: {
-              topics: {
-                include: { topic: { select: { name: true, slug: true } } },
+              topicArea: true,
+              entries: {
+                orderBy: { orderIndex: "asc" },
+                include: {
+                  subTopic: true,
+                },
               },
             },
           },
@@ -93,24 +83,15 @@ export default async function AdminInterviewDetailPage({
           </h1>
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
             <Badge variant="outline">
-              {interview.roleLevel.replace(/_/g, " ")}
+              {interview.roleLevel.name}
             </Badge>
             <Badge variant="outline">
-              {interview.season} {interview.year}
+              {interview.year}
             </Badge>
-            <Badge
-              className={cn(
-                "font-normal",
-                OUTCOME_TONE[interview.finalOutcome] ?? "",
-              )}
-            >
-              {interview.finalOutcome}
-            </Badge>
-            <Badge variant="outline">
-              {interview.isOnCampus ? "On-campus" : "Off-campus"}
-            </Badge>
-            {interview.source ? (
-              <Badge variant="outline">Source: {interview.source}</Badge>
+            {interview.totalSelected != null ? (
+              <Badge variant="outline">
+                Total selected: {interview.totalSelected}
+              </Badge>
             ) : null}
           </div>
           <p className="text-muted-foreground mt-2 text-xs">
@@ -134,55 +115,13 @@ export default async function AdminInterviewDetailPage({
             redirectAfter="/admin/interviews"
           />
           <Button
-            variant="ghost"
-            render={<Link href={`/experiences/${interview.id}`} />}
+            variant="outline"
+            render={<Link href={`/experiences/${interview.id}`} target="_blank" />}
           >
-            View as student
+            View as student ↗
           </Button>
         </div>
       </header>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Candidate profile</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <dl className="grid gap-3 sm:grid-cols-3">
-            <DlRow label="CGPA" value={fmtNum(interview.candidateCgpa)} />
-            <DlRow
-              label="Branch"
-              value={interview.candidateBranch?.replace(/_/g, " ") ?? "—"}
-            />
-            <DlRow
-              label="Grad year"
-              value={interview.candidateGradYear?.toString() ?? "—"}
-            />
-            <DlRow
-              label="CGPA cutoff"
-              value={fmtNum(interview.cgpaCutoff)}
-            />
-            <DlRow
-              label="Total selected"
-              value={interview.totalSelected?.toString() ?? "—"}
-            />
-            <DlRow
-              label="Mode"
-              value={interview.isOnCampus ? "On-campus" : "Off-campus"}
-            />
-          </dl>
-          {interview.candidateBackground ? (
-            <>
-              <Separator />
-              <div>
-                <p className="text-muted-foreground mb-1 text-xs uppercase">
-                  Background
-                </p>
-                <MarkdownRenderer content={interview.candidateBackground} />
-              </div>
-            </>
-          ) : null}
-        </CardContent>
-      </Card>
 
       {interview.biggestTip ? (
         <Card>
@@ -240,95 +179,54 @@ export default async function AdminInterviewDetailPage({
                 </p>
               ) : null}
 
-              {r.questions.length === 0 ? (
+              {r.topicCoverages.length === 0 ? (
                 <p className="text-muted-foreground italic">
-                  No questions recorded.
+                  No topic coverages recorded.
                 </p>
               ) : (
-                r.questions.map((q) => (
-                  <div key={q.id} className="rounded-md border p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="font-mono">
-                        Q{q.orderIndex + 1}
-                      </Badge>
-                      <span className="font-medium">{q.title}</span>
-                      <Badge variant="secondary">
-                        {q.category.replace(/_/g, " ")}
-                      </Badge>
-                      <Badge
-                        className={cn(
-                          "font-normal",
-                          DIFFICULTY_TONE[q.difficulty] ?? "",
-                        )}
-                      >
-                        {q.difficulty}
-                      </Badge>
-                      {q.solvedStatus ? (
-                        <Badge variant="outline">
-                          {q.solvedStatus.replace(/_/g, " ")}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    {q.topics.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {q.topics.map(({ topic }) => (
-                          <Badge key={topic.slug} variant="outline">
-                            {topic.name}
+                <div className="space-y-3">
+                  <span className="text-muted-foreground text-xs uppercase font-medium">
+                    Topic Coverages
+                  </span>
+                  <div className="grid gap-3">
+                    {r.topicCoverages.map((cov) => (
+                      <div key={cov.id} className="rounded-md border p-3 bg-slate-50 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-slate-800">{cov.topicArea.name}</span>
+                          <Badge variant="outline">
+                            {cov.subTopicCount} sub-topic{cov.subTopicCount === 1 ? "" : "s"}
                           </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="mt-3 space-y-3">
-                      <div>
-                        <p className="text-muted-foreground mb-1 text-xs uppercase">
-                          Statement
-                        </p>
-                        <MarkdownRenderer content={q.statement} />
-                      </div>
-                      {q.approach ? (
-                        <details className="text-sm">
-                          <summary className="cursor-pointer underline">
-                            Show approach
-                          </summary>
-                          <div className="mt-2">
-                            <MarkdownRenderer content={q.approach} />
-                          </div>
-                        </details>
-                      ) : null}
-                      {q.followUps.length > 0 ? (
-                        <div>
-                          <p className="text-muted-foreground mb-1 text-xs uppercase">
-                            Follow-ups
-                          </p>
-                          <ul className="ml-5 list-disc">
-                            {q.followUps.map((fu, i) => (
-                              <li key={i}>{fu}</li>
-                            ))}
-                          </ul>
                         </div>
-                      ) : null}
-                      <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                        {q.timeGivenMin != null ? (
-                          <span>Time given: {q.timeGivenMin} min</span>
-                        ) : null}
-                        {q.timeTakenMin != null ? (
-                          <span>Time taken: {q.timeTakenMin} min</span>
-                        ) : null}
-                        {q.referenceUrl ? (
-                          <a
-                            className="underline"
-                            href={q.referenceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <ExternalLinkIcon className="mr-1 inline size-3" />
-                            Reference
-                          </a>
-                        ) : null}
+                        {cov.entries.length > 0 && (
+                          <div className="space-y-2 pt-1">
+                            {cov.entries.map((entry) => (
+                              <div key={entry.id} className="pl-3 border-l-2 border-slate-200 py-1 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-medium text-slate-700">{entry.subTopic.name}</span>
+                                  {entry.referenceUrl && (
+                                    <a
+                                      href={entry.referenceUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-indigo-600 hover:underline flex items-center gap-0.5"
+                                    >
+                                      <ExternalLinkIcon className="size-3" /> Reference
+                                    </a>
+                                  )}
+                                </div>
+                                {entry.exactQuestionText && (
+                                  <div className="text-xs text-slate-600 bg-white p-2 rounded border border-slate-100 mt-1 font-mono whitespace-pre-wrap">
+                                    {entry.exactQuestionText}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))
+                </div>
               )}
 
               {r.keyLearnings ? (
@@ -370,19 +268,6 @@ export default async function AdminInterviewDetailPage({
   );
 }
 
-function DlRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
-      <dt className="text-muted-foreground text-xs uppercase">{label}</dt>
-      <dd className="font-mono">{value}</dd>
-    </div>
-  );
-}
-
-function fmtNum(n: number | null): string {
-  if (n === null || n === undefined) return "—";
-  return n.toString();
-}
 
 function AssetList({
   assets,

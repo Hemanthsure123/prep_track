@@ -16,39 +16,6 @@ enum UserRole {
   STUDENT
 }
 
-enum RoleLevel {
-  INTERN
-  SDE_1
-  SDE_2
-  SDE_3
-  FRONTEND_INTERN
-  FRONTEND_SDE
-  BACKEND_INTERN
-  BACKEND_SDE
-  FULLSTACK
-  DATA_ENGINEER
-  ML_ENGINEER
-  OTHER
-}
-
-enum Branch {
-  CSE
-  IT
-  ECE
-  EEE
-  MECH
-  CIVIL
-  CHEM
-  AI_ML
-  OTHER
-}
-
-enum Season {
-  SUMMER
-  WINTER
-  OFF_CYCLE
-}
-
 enum InterviewMode {
   ONLINE
   OFFLINE
@@ -79,46 +46,25 @@ enum RoundOutcome {
   NO_SHOW
 }
 
-enum FinalOutcome {
-  SELECTED
-  REJECTED
-  WAITLISTED
-  WITHDREW
-  IN_PROCESS
-}
-
-enum QuestionCategory {
-  DSA
-  FRONTEND
-  BACKEND
-  DBMS
-  OPERATING_SYSTEMS
-  NETWORKING
-  SYSTEM_DESIGN
-  OOPS
-  CORE_CS
+enum Branch {
+  CSE
+  IT
+  ECE
+  EEE
+  MECH
+  CIVIL
+  CHEM
   AI_ML
-  APTITUDE
-  BEHAVIORAL
-  SCENARIO
-  PROJECT_DISCUSSION
-  LINUX
-  COMMUNICATION
   OTHER
 }
 
-enum Difficulty {
-  EASY
-  MEDIUM
-  HARD
-}
-
-enum SolvedStatus {
-  SOLVED
-  PARTIAL
-  NOT_SOLVED
-  RAN_OUT_OF_TIME
-  SKIPPED
+enum ImportStatus {
+  QUEUED
+  EXTRACTING
+  READY_FOR_REVIEW
+  APPROVED
+  PUBLISHED
+  FAILED
 }
 
 // ============ CORE ============
@@ -136,45 +82,47 @@ model Company {
   @@index([slug])
 }
 
+model RoleLevel {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  slug       String      @unique
+  createdAt  DateTime    @default(now())
+  interviews Interview[]
+}
+
 model Interview {
-  id                  String       @id @default(cuid())
-  company             Company      @relation(fields: [companyId], references: [id])
+  id                  String     @id @default(cuid())
+  company             Company    @relation(fields: [companyId], references: [id])
   companyId           String
   role                String
-  roleLevel           RoleLevel
+  roleLevel           RoleLevel  @relation(fields: [roleLevelId], references: [id])
+  roleLevelId         String
   year                Int
-  season              Season
-  isOnCampus          Boolean
-  source              String?
-  cgpaCutoff          Float?
   totalSelected       Int?
-
-  // Candidate profile (captured now, exposed in UI later via feature flag)
+  biggestTip          String?
   candidateCgpa       Float?
   candidateBranch     Branch?
   candidateGradYear   Int?
   candidateBackground String?
-
-  finalOutcome        FinalOutcome
-  biggestTip          String?
-  publishedAt         DateTime     @default(now())
-
-  createdBy           User         @relation(fields: [createdById], references: [id])
+  publishedAt         DateTime   @default(now())
+  createdBy           User       @relation(fields: [createdById], references: [id])
   createdById         String
 
   rounds              Round[]
   assets              Asset[]
   bookmarks           Bookmark[]
+  importedFrom        ImportRow? @relation("ImportToInterview")
 
-  @@index([companyId, roleLevel, year])
-  @@index([roleLevel])
+  @@index([companyId, roleLevelId, year])
+  @@index([roleLevelId])
   @@index([year])
   @@index([publishedAt])
+  @@index([candidateBranch])
 }
 
 model Round {
-  id              String        @id @default(cuid())
-  interview       Interview     @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  id              String           @id @default(cuid())
+  interview       Interview        @relation(fields: [interviewId], references: [id], onDelete: Cascade)
   interviewId     String
   roundNumber     Int
   roundName       String
@@ -186,56 +134,70 @@ model Round {
   outcome         RoundOutcome
   keyLearnings    String?
 
-  questions       Question[]
+  topicCoverages  TopicCoverage[]
   assets          Asset[]
 
   @@index([interviewId, roundNumber])
   @@index([roundType])
 }
 
-model Question {
-  id           String           @id @default(cuid())
-  round        Round            @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  roundId      String
-  orderIndex   Int
-  title        String
-  statement    String
-  category     QuestionCategory
-  difficulty   Difficulty
-  approach     String?
-  timeGivenMin Int?
-  timeTakenMin Int?
-  solvedStatus SolvedStatus?
-  followUps    String[]
-  referenceUrl String?
+// ============ TOPIC AREAS & SUB-TOPICS ============
 
-  topics       QuestionTopic[]
+model TopicArea {
+  id             String          @id @default(cuid())
+  name           String          @unique
+  slug           String          @unique
+  sortOrder      Int             @default(0)
+  createdAt      DateTime        @default(now())
+
+  subTopics      SubTopic[]
+  topicCoverages TopicCoverage[]
+
+  @@index([sortOrder])
+}
+
+model SubTopic {
+  id            String           @id @default(cuid())
+  name          String
+  slug          String
+  topicArea     TopicArea        @relation(fields: [topicAreaId], references: [id])
+  topicAreaId   String
+  createdAt     DateTime         @default(now())
+
+  entries       SubTopicEntry[]
+
+  @@unique([slug, topicAreaId])
+  @@unique([name, topicAreaId])
+  @@index([topicAreaId])
+}
+
+model TopicCoverage {
+  id              String          @id @default(cuid())
+  round           Round           @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  roundId         String
+  topicArea       TopicArea       @relation(fields: [topicAreaId], references: [id])
+  topicAreaId     String
+  subTopicCount   Int             @default(0)
+  orderIndex      Int             @default(0)
+
+  entries         SubTopicEntry[]
 
   @@index([roundId, orderIndex])
-  @@index([category, difficulty])
+  @@index([topicAreaId])
 }
 
-// ============ TAXONOMY ============
+model SubTopicEntry {
+  id                 String        @id @default(cuid())
+  topicCoverage      TopicCoverage @relation(fields: [topicCoverageId], references: [id], onDelete: Cascade)
+  topicCoverageId    String
+  subTopic           SubTopic      @relation(fields: [subTopicId], references: [id])
+  subTopicId         String
+  orderIndex         Int           @default(0)
+  exactQuestionText  String?
+  referenceUrl       String?
 
-model Topic {
-  id        String           @id @default(cuid())
-  name      String
-  slug      String           @unique
-  category  QuestionCategory
-  questions QuestionTopic[]
-
-  @@unique([name, category])
-  @@index([category])
-}
-
-model QuestionTopic {
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  questionId String
-  topic      Topic    @relation(fields: [topicId], references: [id])
-  topicId    String
-
-  @@id([questionId, topicId])
-  @@index([topicId])
+  @@index([topicCoverageId, orderIndex])
+  @@index([subTopicId])
 }
 
 // ============ ASSETS ============
@@ -246,7 +208,7 @@ model Asset {
   interviewId String?
   round       Round?     @relation(fields: [roundId], references: [id], onDelete: Cascade)
   roundId     String?
-  kind        String     // "prep_pdf" | "infographic_pdf" | "external_link"
+  kind        String
   url         String
   label       String?
   uploadedAt  DateTime   @default(now())
@@ -258,17 +220,19 @@ model Asset {
 // ============ USERS ============
 
 model User {
-  id         String      @id @default(cuid())
-  email      String      @unique
-  name       String?
-  role       UserRole    @default(STUDENT)
-  branch     Branch?
-  cgpa       Float?
-  gradYear   Int?
-  createdAt  DateTime    @default(now())
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  role         UserRole      @default(STUDENT)
+  branch       Branch?
+  gradYear     Int?
+  avatarUrl    String?
+  onboardedAt  DateTime?
+  createdAt    DateTime      @default(now())
 
-  interviews Interview[]
-  bookmarks  Bookmark[]
+  interviews   Interview[]
+  bookmarks    Bookmark[]
+  importBatches ImportBatch[]
 }
 
 model Bookmark {
@@ -276,11 +240,46 @@ model Bookmark {
   userId      String
   interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
   interviewId String
-
   createdAt   DateTime  @default(now())
 
   @@id([userId, interviewId])
   @@index([interviewId])
+}
+
+// ============ CSV IMPORT ============
+
+model ImportBatch {
+  id           String      @id @default(cuid())
+  uploadedBy   User        @relation(fields: [uploadedById], references: [id])
+  uploadedById String
+  filename     String
+  totalRows    Int
+  createdAt    DateTime    @default(now())
+
+  rows         ImportRow[]
+
+  @@index([uploadedById, createdAt])
+}
+
+model ImportRow {
+  id                    String       @id @default(cuid())
+  batch                 ImportBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batchId               String
+  rowIndex              Int
+  companyName           String
+  status                ImportStatus @default(QUEUED)
+  rawCsvJson            Json
+  extractedJson         Json?
+  extractionTokens      Int?
+  extractionCostUsd     Float?
+  errorMessage          String?
+  publishedInterview    Interview?   @relation("ImportToInterview", fields: [publishedInterviewId], references: [id])
+  publishedInterviewId  String?      @unique
+  reviewedAt            DateTime?
+  updatedAt             DateTime     @updatedAt
+
+  @@index([batchId, status])
+  @@index([status])
 }
 
 // ============ FEATURE FLAGS ============

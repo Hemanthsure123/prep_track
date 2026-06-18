@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { User, UserRole } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
@@ -28,9 +30,35 @@ export async function getCurrentDbUser(): Promise<User | null> {
   return prisma.user.findUnique({ where: { email: authUser.email } });
 }
 
+/** Alias matching Step 7 spec naming. */
+export const getCurrentUser = getCurrentDbUser;
+
 export async function requireSignedIn(): Promise<User> {
   const user = await getCurrentDbUser();
   if (!user) throw new UnauthorizedError();
+  return user;
+}
+
+/**
+ * Server-component-friendly: redirects unauthenticated visitors to /login,
+ * preserving the current path as `?next=` so we can return them after sign-in.
+ */
+export async function requireUser(): Promise<User> {
+  const user = await getCurrentDbUser();
+  if (!user) {
+    const hdrs = await headers();
+    const path = hdrs.get("x-pathname") ?? "/";
+    redirect(`/login?next=${encodeURIComponent(path)}`);
+  }
+  return user;
+}
+
+/** Same as requireUser but additionally forces /onboarding for incomplete profiles. */
+export async function requireOnboarded(): Promise<User> {
+  const user = await requireUser();
+  if (!user.onboardedAt) {
+    redirect("/onboarding");
+  }
   return user;
 }
 

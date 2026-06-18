@@ -2,13 +2,9 @@ import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
-import { ForbiddenError, requireAdminOrPanelist } from "@/lib/auth/guards";
+import { ForbiddenError, UnauthorizedError, requireAdminOrPanelist } from "@/lib/auth/guards";
 import { ASSETS_BUCKET } from "@/lib/storage";
-import type {
-  CompanyOption,
-  TopicOption,
-  WizardValues,
-} from "@/components/forms/wizard/types";
+import type { WizardValues } from "@/components/forms/wizard/types";
 
 import { EditInterviewClient } from "./edit-interview-client";
 
@@ -40,13 +36,14 @@ export default async function EditInterviewPage({
   try {
     await requireAdminOrPanelist();
   } catch (err) {
-    if (err instanceof ForbiddenError) redirect("/admin");
+    if (err instanceof ForbiddenError) redirect("/");
+    if (err instanceof UnauthorizedError) redirect("/login");
     throw err;
   }
 
   const { id } = await params;
 
-  const [interview, companies, topics] = await Promise.all([
+  const [interview, companies, topicAreas, subTopics, roleLevels] = await Promise.all([
     prisma.interview.findUnique({
       where: { id },
       include: {
@@ -55,9 +52,18 @@ export default async function EditInterviewPage({
           orderBy: { roundNumber: "asc" },
           include: {
             assets: true,
-            questions: {
+            topicCoverages: {
               orderBy: { orderIndex: "asc" },
-              include: { topics: { select: { topicId: true } } },
+              include: {
+                entries: {
+                  orderBy: { orderIndex: "asc" },
+                  include: {
+                    subTopic: {
+                      select: { name: true },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -67,9 +73,17 @@ export default async function EditInterviewPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true, slug: true },
     }),
-    prisma.topic.findMany({
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, slug: true, category: true },
+    prisma.topicArea.findMany({
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true, slug: true, sortOrder: true },
+    }),
+    prisma.subTopic.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true, topicAreaId: true },
+    }),
+    prisma.roleLevel.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true },
     }),
   ]);
 
@@ -79,18 +93,10 @@ export default async function EditInterviewPage({
     company: { mode: "existing", companyId: interview.companyId },
     interview: {
       role: interview.role,
-      roleLevel: interview.roleLevel,
+      roleLevelId: interview.roleLevelId,
+      roleLevelName: "",
       year: interview.year,
-      season: interview.season,
-      isOnCampus: interview.isOnCampus,
-      source: interview.source ?? null,
-      cgpaCutoff: interview.cgpaCutoff ?? null,
       totalSelected: interview.totalSelected ?? null,
-      candidateCgpa: interview.candidateCgpa ?? null,
-      candidateBranch: interview.candidateBranch ?? null,
-      candidateGradYear: interview.candidateGradYear ?? null,
-      candidateBackground: interview.candidateBackground ?? null,
-      finalOutcome: interview.finalOutcome,
       biggestTip: interview.biggestTip ?? null,
     },
     rounds: interview.rounds.map((r) => ({
@@ -103,19 +109,17 @@ export default async function EditInterviewPage({
       interviewStyle: r.interviewStyle ?? null,
       outcome: r.outcome,
       keyLearnings: r.keyLearnings ?? null,
-      questions: r.questions.map((q) => ({
-        orderIndex: q.orderIndex,
-        title: q.title,
-        statement: q.statement,
-        category: q.category,
-        difficulty: q.difficulty,
-        approach: q.approach ?? null,
-        timeGivenMin: q.timeGivenMin ?? null,
-        timeTakenMin: q.timeTakenMin ?? null,
-        solvedStatus: q.solvedStatus ?? null,
-        followUps: q.followUps,
-        referenceUrl: q.referenceUrl ?? null,
-        topicIds: q.topics.map((t) => t.topicId),
+      topicCoverages: r.topicCoverages.map((tc) => ({
+        topicAreaId: tc.topicAreaId,
+        subTopicCount: tc.subTopicCount,
+        orderIndex: tc.orderIndex,
+        entries: tc.entries.map((e) => ({
+          subTopicId: e.subTopicId,
+          subTopicName: e.subTopic?.name || "",
+          orderIndex: e.orderIndex,
+          exactQuestionText: e.exactQuestionText ?? "",
+          referenceUrl: e.referenceUrl ?? "",
+        })),
       })),
     })),
     assets: [
@@ -140,22 +144,21 @@ export default async function EditInterviewPage({
     ],
   };
 
-  const companyOptions: CompanyOption[] = companies;
-  const topicOptions: TopicOption[] = topics;
-
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Edit interview</h1>
         <p className="text-muted-foreground text-sm">
-          Changes replace the existing rounds, questions, and assets in a
+          Changes replace the existing rounds, topic coverages, and assets in a
           single transaction.
         </p>
       </header>
       <EditInterviewClient
         id={id}
-        companies={companyOptions}
-        topics={topicOptions}
+        companies={companies}
+        topicAreas={topicAreas}
+        subTopics={subTopics}
+        roleLevels={roleLevels}
         initialValues={initialValues}
       />
     </div>

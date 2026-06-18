@@ -4,22 +4,30 @@ import { createFullInterview } from "@/app/_actions/interview";
 import { InterviewWizard } from "@/components/forms/wizard/WizardShell";
 import type {
   CompanyOption,
-  TopicOption,
+  RoleLevelOption,
+  TopicAreaOption,
+  SubTopicOption,
   WizardValues,
 } from "@/components/forms/wizard/types";
 
 export function NewInterviewClient({
   companies,
-  topics,
+  topicAreas,
+  subTopics,
+  roleLevels,
 }: {
   companies: CompanyOption[];
-  topics: TopicOption[];
+  topicAreas: TopicAreaOption[];
+  subTopics: SubTopicOption[];
+  roleLevels: RoleLevelOption[];
 }) {
   return (
     <InterviewWizard
       mode="create"
       companies={companies}
-      topics={topics}
+      topicAreas={topicAreas}
+      subTopics={subTopics}
+      roleLevels={roleLevels}
       cancelHref="/admin/interviews"
       onSubmit={async (values: WizardValues) => createFullInterview(values)}
     />

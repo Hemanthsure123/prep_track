@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,6 +26,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { InlineSpinner } from "@/components/loading/InlineSpinner";
 import { createClient } from "@/lib/supabase/client";
 
 const schema = z.object({
@@ -36,9 +37,9 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [submitting, setSubmitting] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -57,11 +58,28 @@ export function LoginForm() {
       }
 
       toast.success("Signed in.");
-      const next = searchParams.get("next") ?? "/admin";
-      router.push(next);
-      router.refresh();
+      const next = searchParams.get("next") ?? "/dashboard";
+      window.location.href = next;
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function signInWithGoogle() {
+    setOauthLoading(true);
+    try {
+      const supabase = createClient();
+      const next = searchParams.get("next") ?? "/dashboard";
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo },
+      });
+      if (error) {
+        toast.error(error.message);
+      }
+    } finally {
+      setOauthLoading(false);
     }
   }
 
@@ -74,9 +92,33 @@ export function LoginForm() {
             Welcome back. Enter your credentials to continue.
           </CardDescription>
         </CardHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardContent className="space-y-4">
+        <CardContent className="space-y-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={signInWithGoogle}
+            disabled={oauthLoading || submitting}
+          >
+            {oauthLoading ? (
+              <InlineSpinner className="mr-2" />
+            ) : (
+              <GoogleIcon className="size-4" />
+            )}
+            Continue with Google
+          </Button>
+
+          <div className="relative flex items-center my-2">
+            <div className="flex-1 border-t border-border" />
+            <span className="mx-3 text-xs text-muted-foreground">or</span>
+            <div className="flex-1 border-t border-border" />
+          </div>
+
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
                 name="email"
@@ -112,21 +154,55 @@ export function LoginForm() {
                   </FormItem>
                 )}
               />
-            </CardContent>
-            <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? "Signing in…" : "Sign in"}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={submitting || oauthLoading}
+              >
+                {submitting ? (
+                  <>
+                    <InlineSpinner className="mr-2" />
+                    Signing in…
+                  </>
+                ) : (
+                  "Sign in"
+                )}
               </Button>
-              <p className="text-muted-foreground text-sm">
-                No account?{" "}
-                <Link href="/signup" className="text-foreground underline">
-                  Create one
-                </Link>
-              </p>
-            </CardFooter>
-          </form>
-        </Form>
+            </form>
+          </Form>
+        </CardContent>
+        <CardFooter>
+          <p className="text-muted-foreground text-sm">
+            No account?{" "}
+            <Link href="/signup" className="text-foreground underline">
+              Create one
+            </Link>
+          </p>
+        </CardFooter>
       </Card>
     </main>
+  );
+}
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden>
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.65l-3.57-2.77c-.99.66-2.25 1.06-3.71 1.06-2.86 0-5.28-1.93-6.14-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.86 14.11A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.36-2.11V7.05H2.18A11 11 0 0 0 1 12c0 1.78.43 3.46 1.18 4.95l3.68-2.84Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.05l3.68 2.84C6.72 7.31 9.14 5.38 12 5.38Z"
+      />
+    </svg>
   );
 }

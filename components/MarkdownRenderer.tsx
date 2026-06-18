@@ -49,6 +49,26 @@ async function compile(markdown: string): Promise<string> {
   return String(file);
 }
 
+async function compilePlain(markdown: string): Promise<string> {
+  const file = await unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkRehype)
+    .use(rehypeSanitize, sanitizeSchema)
+    .use(rehypeStringify)
+    .process(markdown);
+  return String(file);
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function MarkdownRenderer({
   content,
   className,
@@ -57,7 +77,18 @@ export async function MarkdownRenderer({
   className?: string;
 }) {
   if (!content || content.trim().length === 0) return null;
-  const html = await compile(content);
+
+  let html: string;
+  try {
+    html = await compile(content);
+  } catch {
+    try {
+      html = await compilePlain(content);
+    } catch {
+      html = `<pre class="whitespace-pre-wrap">${escapeHtml(content)}</pre>`;
+    }
+  }
+
   return (
     <div
       className={cn(

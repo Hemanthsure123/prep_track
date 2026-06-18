@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FormProvider } from "react-hook-form";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -17,10 +18,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { InlineSpinner } from "@/components/loading/InlineSpinner";
 
 import { Step1Interview } from "./Step1Interview";
 import { Step2Rounds } from "./Step2Rounds";
-import { Step3Questions } from "./Step3Questions";
+import { Step3TopicCoverage } from "./Step3TopicCoverage";
 import { Step4ReviewAndSubmit } from "./Step4ReviewAndSubmit";
 import { StepIndicator } from "./StepIndicator";
 import {
@@ -30,7 +32,9 @@ import {
 } from "./useInterviewWizard";
 import type {
   CompanyOption,
-  TopicOption,
+  RoleLevelOption,
+  TopicAreaOption,
+  SubTopicOption,
   WizardMode,
   WizardStep,
   WizardValues,
@@ -41,24 +45,58 @@ export type InterviewWizardProps = {
   mode: WizardMode;
   initialValues?: WizardValues;
   companies: CompanyOption[];
-  topics: TopicOption[];
+  topicAreas: TopicAreaOption[];
+  subTopics: SubTopicOption[];
+  roleLevels: RoleLevelOption[];
   onSubmit: (values: WizardValues) => Promise<{ id: string }>;
   cancelHref: string;
+  /** Optional banner shown above the wizard (e.g. for import-review mode). */
+  banner?: { title: string; description?: string };
+  /** Override the starting step. Defaults to 1; import-review usually passes 4. */
+  initialStep?: WizardStep;
+  /** Override the submit button label. */
+  submitLabelOverride?: { idle: string; busy: string };
+  /** Toast text after a successful submit. */
+  successToast?: string;
+  /** Where to navigate after a successful submit. */
+  successHrefBuilder?: (id: string) => string;
 };
 
 export function InterviewWizard({
   mode,
   initialValues,
   companies,
-  topics,
+  topicAreas,
+  subTopics,
+  roleLevels,
   onSubmit,
   cancelHref,
+  banner,
+  initialStep,
+  submitLabelOverride,
+  successToast,
+  successHrefBuilder,
 }: InterviewWizardProps) {
   const router = useRouter();
   const form = useInterviewWizardForm({ mode, initialValues });
-  const nav = useWizardNavigation(form);
+  const nav = useWizardNavigation(form, { initialStep });
   const { discardDraft } = useWizardDraft(mode);
   const [submitting, setSubmitting] = useState(false);
+
+  const idleLabel =
+    submitLabelOverride?.idle ??
+    (mode === "create"
+      ? "Create interview"
+      : mode === "edit"
+        ? "Save changes"
+        : "Approve & Publish");
+  const busyLabel =
+    submitLabelOverride?.busy ??
+    (mode === "create"
+      ? "Publishing interview…"
+      : mode === "edit"
+        ? "Saving changes…"
+        : "Publishing…");
 
   async function handleSubmit() {
     const valid = await form.trigger();
@@ -72,9 +110,17 @@ export function InterviewWizard({
       const { id } = await onSubmit(values);
       discardDraft();
       toast.success(
-        mode === "create" ? "Interview created." : "Interview updated.",
+        successToast ??
+          (mode === "create"
+            ? "Interview created."
+            : mode === "edit"
+              ? "Interview updated."
+              : "Interview approved & published."),
       );
-      router.push(`/admin/interviews/${id}`);
+      const href = successHrefBuilder
+        ? successHrefBuilder(id)
+        : `/admin/interviews/${id}`;
+      router.push(href);
       router.refresh();
     } catch (err) {
       const message =
@@ -95,6 +141,20 @@ export function InterviewWizard({
   return (
     <FormProvider {...form}>
       <div className="flex flex-1 flex-col gap-6 pb-24">
+        {banner && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/15 dark:text-amber-200">
+            <Sparkles className="size-4 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium">{banner.title}</p>
+              {banner.description && (
+                <p className="text-amber-900/80 dark:text-amber-200/80">
+                  {banner.description}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3">
           <StepIndicator
             current={nav.currentStep}
@@ -131,18 +191,19 @@ export function InterviewWizard({
 
         <div className="flex-1">
           {nav.currentStep === 1 ? (
-            <Step1Interview companies={companies} />
+            <Step1Interview companies={companies} roleLevels={roleLevels} />
           ) : null}
           {nav.currentStep === 2 ? <Step2Rounds /> : null}
-          {nav.currentStep === 3 ? <Step3Questions topics={topics} /> : null}
+          {nav.currentStep === 3 ? (
+            <Step3TopicCoverage topicAreas={topicAreas} subTopics={subTopics} />
+          ) : null}
           {nav.currentStep === 4 ? (
             <Step4ReviewAndSubmit
               companies={companies}
-              topics={topics}
+              topicAreas={topicAreas}
+              subTopics={subTopics}
               submitting={submitting}
-              submitLabel={
-                mode === "create" ? "Create interview" : "Save changes"
-              }
+              submitLabel={idleLabel}
               onSubmit={handleSubmit}
             />
           ) : null}
@@ -154,9 +215,8 @@ export function InterviewWizard({
           onNext={nav.goNext}
           onSubmit={handleSubmit}
           submitting={submitting}
-          submitLabel={
-            mode === "create" ? "Create interview" : "Save changes"
-          }
+          idleLabel={idleLabel}
+          busyLabel={busyLabel}
         />
       </div>
     </FormProvider>
@@ -169,14 +229,16 @@ function WizardFooter({
   onNext,
   onSubmit,
   submitting,
-  submitLabel,
+  idleLabel,
+  busyLabel,
 }: {
   step: WizardStep;
   onBack: () => void;
   onNext: () => void | Promise<void>;
   onSubmit: () => void | Promise<void>;
   submitting: boolean;
-  submitLabel: string;
+  idleLabel: string;
+  busyLabel: string;
 }) {
   return (
     <div className="bg-background fixed inset-x-0 bottom-0 z-40 border-t shadow-sm">
@@ -198,7 +260,14 @@ function WizardFooter({
           </Button>
         ) : (
           <Button type="button" onClick={onSubmit} disabled={submitting}>
-            {submitting ? "Submitting…" : submitLabel}
+            {submitting ? (
+              <>
+                <InlineSpinner className="mr-2" />
+                {busyLabel}
+              </>
+            ) : (
+              idleLabel
+            )}
           </Button>
         )}
       </div>

@@ -1,0 +1,16 @@
+{
+  "name": "claude-simple-app",
+  "version": "1.0.0",
+  "description": "Simple Claude API App",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1"
+  }
+}

@@ -1,33 +1,15 @@
 "use client";
 
-import { Controller, useFormContext } from "react-hook-form";
-import {
-  Branch,
-  FinalOutcome,
-  RoleLevel,
-  Season,
-} from "@prisma/client";
+import { useFormContext } from "react-hook-form";
 
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
 import { CompanyAutocomplete } from "./CompanyAutocomplete";
+import { RoleLevelAutocomplete } from "./RoleLevelAutocomplete";
 import { FieldError, FieldHint, FieldLabel, FieldRow } from "./FieldRow";
-import type { CompanyOption, WizardValues } from "./types";
-
-const ROLE_LEVELS = Object.values(RoleLevel);
-const SEASONS = Object.values(Season);
-const BRANCHES = Object.values(Branch);
-const FINAL_OUTCOMES = Object.values(FinalOutcome);
+import type { CompanyOption, RoleLevelOption, WizardValues } from "./types";
 
 const setValueAsOptionalInt = (raw: unknown) => {
   if (raw === "" || raw === null || raw === undefined) return null;
@@ -35,20 +17,15 @@ const setValueAsOptionalInt = (raw: unknown) => {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 };
 
-const setValueAsOptionalFloat = (raw: unknown) => {
-  if (raw === "" || raw === null || raw === undefined) return null;
-  const n = typeof raw === "number" ? raw : Number(raw);
-  return Number.isFinite(n) ? n : null;
-};
-
 export function Step1Interview({
   companies,
+  roleLevels,
 }: {
   companies: CompanyOption[];
+  roleLevels: RoleLevelOption[];
 }) {
   const {
     register,
-    control,
     formState: { errors },
   } = useFormContext<WizardValues>();
   const interviewErrors = errors.interview;
@@ -87,29 +64,14 @@ export function Step1Interview({
           </div>
           <div className="space-y-2">
             <FieldLabel required>Role level</FieldLabel>
-            <Controller
-              control={control}
-              name="interview.roleLevel"
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLE_LEVELS.map((rl) => (
-                      <SelectItem key={rl} value={rl}>
-                        {rl.replace(/_/g, " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            <FieldError message={interviewErrors?.roleLevel?.message} />
+            <RoleLevelAutocomplete roleLevels={roleLevels} />
+            <FieldHint>
+              Pick one from the list, or type to create a new role level.
+            </FieldHint>
           </div>
         </FieldRow>
 
-        <FieldRow cols={3}>
+        <FieldRow cols={2}>
           <div className="space-y-2">
             <FieldLabel htmlFor="year" required>
               Year
@@ -121,77 +83,6 @@ export function Step1Interview({
               {...register("interview.year", { valueAsNumber: true })}
             />
             <FieldError message={interviewErrors?.year?.message} />
-          </div>
-          <div className="space-y-2">
-            <FieldLabel required>Season</FieldLabel>
-            <Controller
-              control={control}
-              name="interview.season"
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SEASONS.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s.replace(/_/g, " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            <FieldError message={interviewErrors?.season?.message} />
-          </div>
-          <div className="space-y-2">
-            <FieldLabel>On-campus?</FieldLabel>
-            <Controller
-              control={control}
-              name="interview.isOnCampus"
-              render={({ field }) => (
-                <label className="flex h-9 items-center gap-2 rounded-md border px-3">
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={(c) => field.onChange(c === true)}
-                  />
-                  <span className="text-sm">
-                    {field.value ? "On-campus" : "Off-campus"}
-                  </span>
-                </label>
-              )}
-            />
-          </div>
-        </FieldRow>
-
-        <FieldRow cols={3}>
-          <div className="space-y-2">
-            <FieldLabel htmlFor="source" optional>
-              Source
-            </FieldLabel>
-            <Input
-              id="source"
-              placeholder="Campus drive, Referral, LinkedIn…"
-              {...register("interview.source", {
-                setValueAs: (v: string) => (v?.trim() ? v : null),
-              })}
-            />
-          </div>
-          <div className="space-y-2">
-            <FieldLabel htmlFor="cgpaCutoff" optional>
-              CGPA cutoff
-            </FieldLabel>
-            <Input
-              id="cgpaCutoff"
-              type="number"
-              step="0.1"
-              min={0}
-              max={10}
-              {...register("interview.cgpaCutoff", {
-                setValueAs: setValueAsOptionalFloat,
-              })}
-            />
-            <FieldError message={interviewErrors?.cgpaCutoff?.message} />
           </div>
           <div className="space-y-2">
             <FieldLabel htmlFor="totalSelected" optional>
@@ -214,121 +105,11 @@ export function Step1Interview({
 
       <section className="space-y-4">
         <header>
-          <h2 className="text-lg font-semibold">Candidate profile</h2>
+          <h2 className="text-lg font-semibold">Tip & Takeaways</h2>
           <p className="text-muted-foreground text-sm">
-            Captured now; shown to students later via a feature flag.
+            What is the one thing you would tell yourself before this interview?
           </p>
         </header>
-
-        <FieldRow cols={3}>
-          <div className="space-y-2">
-            <FieldLabel htmlFor="candidateCgpa" optional>
-              CGPA
-            </FieldLabel>
-            <Input
-              id="candidateCgpa"
-              type="number"
-              step="0.1"
-              min={0}
-              max={10}
-              {...register("interview.candidateCgpa", {
-                setValueAs: setValueAsOptionalFloat,
-              })}
-            />
-            <FieldError message={interviewErrors?.candidateCgpa?.message} />
-          </div>
-          <div className="space-y-2">
-            <FieldLabel optional>Branch</FieldLabel>
-            <Controller
-              control={control}
-              name="interview.candidateBranch"
-              render={({ field }) => (
-                <Select
-                  value={field.value ?? ""}
-                  onValueChange={(v) => field.onChange(v || null)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="—" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRANCHES.map((b) => (
-                      <SelectItem key={b} value={b}>
-                        {b.replace(/_/g, " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-          <div className="space-y-2">
-            <FieldLabel htmlFor="candidateGradYear" optional>
-              Graduation year
-            </FieldLabel>
-            <Input
-              id="candidateGradYear"
-              type="number"
-              {...register("interview.candidateGradYear", {
-                setValueAs: setValueAsOptionalInt,
-              })}
-            />
-            <FieldError
-              message={interviewErrors?.candidateGradYear?.message}
-            />
-          </div>
-        </FieldRow>
-
-        <div className="space-y-2">
-          <FieldLabel htmlFor="candidateBackground" optional>
-            Background
-          </FieldLabel>
-          <Textarea
-            id="candidateBackground"
-            rows={4}
-            placeholder="Prior internships, projects, OSS, …"
-            {...register("interview.candidateBackground", {
-              setValueAs: (v: string) => (v?.trim() ? v : null),
-            })}
-          />
-          <FieldHint>Markdown supported.</FieldHint>
-        </div>
-      </section>
-
-      <Separator />
-
-      <section className="space-y-4">
-        <header>
-          <h2 className="text-lg font-semibold">Outcome</h2>
-          <p className="text-muted-foreground text-sm">
-            The final disposition and the one thing the candidate wishes
-            they&apos;d known.
-          </p>
-        </header>
-
-        <FieldRow cols={1}>
-          <div className="space-y-2">
-            <FieldLabel required>Final outcome</FieldLabel>
-            <Controller
-              control={control}
-              name="interview.finalOutcome"
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FINAL_OUTCOMES.map((o) => (
-                      <SelectItem key={o} value={o}>
-                        {o.replace(/_/g, " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            <FieldError message={interviewErrors?.finalOutcome?.message} />
-          </div>
-        </FieldRow>
 
         <div className="space-y-2">
           <FieldLabel htmlFor="biggestTip" optional>
@@ -336,8 +117,8 @@ export function Step1Interview({
           </FieldLabel>
           <Textarea
             id="biggestTip"
-            rows={4}
-            placeholder="The one thing you&apos;d tell yourself before this interview…"
+            rows={6}
+            placeholder="Think aloud, explain space complexity, name variables descriptively..."
             {...register("interview.biggestTip", {
               setValueAs: (v: string) => (v?.trim() ? v : null),
             })}

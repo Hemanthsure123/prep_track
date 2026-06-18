@@ -1,27 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { EyeIcon, PencilIcon, PlusIcon } from "lucide-react";
+import { EyeIcon, PencilIcon, PlusIcon, Upload } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
-import { cn } from "@/lib/utils";
 
 import { DeleteInterviewButton } from "./delete-button";
 
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 25;
-
-const OUTCOME_TONE: Record<string, string> = {
-  SELECTED: "bg-emerald-100 text-emerald-700",
-  REJECTED: "bg-red-100 text-red-700",
-  WAITLISTED: "bg-amber-100 text-amber-700",
-  WITHDREW: "bg-slate-100 text-slate-700",
-  IN_PROCESS: "bg-sky-100 text-sky-700",
-};
 
 export default async function AdminInterviewsPage({
   searchParams,
@@ -46,8 +36,19 @@ export default async function AdminInterviewsPage({
       take: PAGE_SIZE,
       include: {
         company: { select: { name: true, slug: true, logoUrl: true } },
+        roleLevel: { select: { name: true } },
         _count: { select: { rounds: true } },
-        rounds: { select: { _count: { select: { questions: true } } } },
+        rounds: {
+          select: {
+            topicCoverages: {
+              select: {
+                _count: {
+                  select: { entries: true },
+                },
+              },
+            },
+          },
+        },
       },
     }),
   ]);
@@ -78,73 +79,70 @@ export default async function AdminInterviewsPage({
     <div className="space-y-6">
       <PageHeader />
 
-      <div className="rounded-md border">
+      <div className="rounded-lg border border-border bg-background overflow-hidden shadow-sm">
         <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-muted-foreground">
-            <tr className="text-left">
-              <th className="px-3 py-2 font-medium">Company</th>
-              <th className="px-3 py-2 font-medium">Role</th>
-              <th className="px-3 py-2 font-medium">Year</th>
-              <th className="px-3 py-2 font-medium">Outcome</th>
-              <th className="px-3 py-2 font-medium">Rounds</th>
-              <th className="px-3 py-2 font-medium">Questions</th>
-              <th className="px-3 py-2 font-medium">Created</th>
-              <th className="px-3 py-2 font-medium text-right">Actions</th>
+          <thead className="bg-secondary text-muted-foreground border-b border-border">
+            <tr className="text-left text-xs uppercase tracking-wider font-extrabold">
+              <th className="px-4 py-3 font-extrabold">Company</th>
+              <th className="px-4 py-3 font-extrabold">Role</th>
+              <th className="px-4 py-3 font-extrabold">Role Level</th>
+              <th className="px-4 py-3 font-extrabold">Year</th>
+              <th className="px-4 py-3 font-extrabold">Rounds</th>
+              <th className="px-4 py-3 font-extrabold">Sub-Topics</th>
+              <th className="px-4 py-3 font-extrabold">Created</th>
+              <th className="px-4 py-3 font-extrabold text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
-              const questionTotal = row.rounds.reduce(
-                (acc, r) => acc + r._count.questions,
+              const subTopicTotal = row.rounds.reduce(
+                (acc, r) =>
+                  acc +
+                  r.topicCoverages.reduce(
+                    (tcAcc, tc) => tcAcc + tc._count.entries,
+                    0,
+                  ),
                 0,
               );
               return (
-                <tr key={row.id} className="border-t">
-                  <td className="px-3 py-2">{row.company.name}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium">{row.role}</div>
-                    <div className="text-muted-foreground text-xs">
-                      {row.roleLevel.replace(/_/g, " ")}
+                <tr key={row.id} className="border-t border-border hover:bg-secondary/50 transition-colors">
+                  <td className="px-4 py-2.5 font-bold text-foreground">{row.company.name}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="font-bold text-foreground">{row.role}</div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="text-muted-foreground text-xs font-semibold">
+                      {row.roleLevel.name}
                     </div>
                   </td>
-                  <td className="px-3 py-2">{row.year}</td>
-                  <td className="px-3 py-2">
-                    <Badge
-                      className={cn(
-                        "font-normal",
-                        OUTCOME_TONE[row.finalOutcome] ?? "",
-                      )}
-                    >
-                      {row.finalOutcome}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2 font-mono">
+                  <td className="px-4 py-2.5 font-semibold text-foreground">{row.year}</td>
+                  <td className="px-4 py-2.5 font-mono font-bold text-foreground">
                     {row._count.rounds}
                   </td>
-                  <td className="px-3 py-2 font-mono">{questionTotal}</td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="px-4 py-2.5 font-mono font-bold text-foreground">{subTopicTotal}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground text-xs font-semibold">
                     {row.publishedAt.toISOString().slice(0, 10)}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="xs"
                         render={
                           <Link href={`/admin/interviews/${row.id}`} />
                         }
                       >
-                        <EyeIcon className="size-4" />
+                        <EyeIcon className="size-3.5" />
                         View
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="xs"
                         render={
                           <Link href={`/admin/interviews/${row.id}/edit`} />
                         }
                       >
-                        <PencilIcon className="size-4" />
+                        <PencilIcon className="size-3.5" />
                         Edit
                       </Button>
                       <DeleteInterviewButton id={row.id} label="Delete" />
@@ -200,16 +198,25 @@ function PageHeader({ empty }: { empty?: boolean }) {
   return (
     <header className="flex items-center justify-between">
       <div>
-        <h1 className="text-2xl font-semibold">Interviews</h1>
+        <h1 className="text-2xl font-bold font-display tracking-tight text-foreground">Interviews</h1>
         <p className="text-muted-foreground text-sm">
           Browse and manage every interview captured in the system.
         </p>
       </div>
       {empty ? null : (
-        <Button render={<Link href="/admin/interviews/new" />}>
-          <PlusIcon className="size-4" />
-          New interview
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            render={<Link href="/admin/imports/new" />}
+          >
+            <Upload className="size-4" />
+            Upload CSV
+          </Button>
+          <Button render={<Link href="/admin/interviews/new" />}>
+            <PlusIcon className="size-4" />
+            New interview
+          </Button>
+        </div>
       )}
     </header>
   );

@@ -1,10 +1,14 @@
 import { Prisma } from "@prisma/client";
 
-import { slugify } from "@/lib/slug";
 import {
   InterviewFullCreate,
   WizardAsset,
 } from "@/lib/validations/interview-full";
+import {
+  getOrCreateCompanyId,
+  getOrCreateRoleLevelId,
+  getOrCreateSubTopicId,
+} from "@/lib/interview/get-or-create";
 
 export class InterviewWriteError extends Error {
   constructor(message: string) {
@@ -30,20 +34,7 @@ export async function resolveCompanyId(
     return row.id;
   }
 
-  const slug = company.data.slug || slugify(company.data.name);
-  const upserted = await tx.company.upsert({
-    where: { slug },
-    update: {},
-    create: {
-      name: company.data.name,
-      slug,
-      logoUrl: company.data.logoUrl ?? null,
-      websiteUrl: company.data.websiteUrl ?? null,
-      description: company.data.description ?? null,
-    },
-    select: { id: true },
-  });
-  return upserted.id;
+  return getOrCreateCompanyId(tx, company.data);
 }
 
 function assetsForRound(
@@ -71,62 +62,19 @@ function interviewLevelAssets(
     }));
 }
 
-function buildRoundsCreate(
-  payload: InterviewFullCreate,
-): Prisma.RoundCreateWithoutInterviewInput[] {
-  return payload.rounds.map((r, roundIndex) => ({
-    roundNumber: roundIndex + 1,
-    roundName: r.roundName,
-    roundType: r.roundType,
-    durationMinutes: r.durationMinutes ?? null,
-    mode: r.mode,
-    numInterviewers: r.numInterviewers ?? null,
-    interviewStyle: r.interviewStyle ?? null,
-    outcome: r.outcome,
-    keyLearnings: r.keyLearnings ?? null,
-    questions: {
-      create: r.questions.map((q, questionIndex) => ({
-        orderIndex: questionIndex,
-        title: q.title,
-        statement: q.statement,
-        category: q.category,
-        difficulty: q.difficulty,
-        approach: q.approach ?? null,
-        timeGivenMin: q.timeGivenMin ?? null,
-        timeTakenMin: q.timeTakenMin ?? null,
-        solvedStatus: q.solvedStatus ?? null,
-        followUps: q.followUps,
-        referenceUrl: q.referenceUrl ?? null,
-        topics: {
-          create: q.topicIds.map((topicId) => ({ topicId })),
-        },
-      })),
-    },
-    assets: { create: assetsForRound(payload.assets, roundIndex) },
-  }));
-}
-
 function interviewCoreData(
   payload: InterviewFullCreate,
   companyId: string,
+  roleLevelId: string,
   userId: string,
 ) {
   return {
     company: { connect: { id: companyId } },
+    roleLevel: { connect: { id: roleLevelId } },
     createdBy: { connect: { id: userId } },
     role: payload.interview.role,
-    roleLevel: payload.interview.roleLevel,
     year: payload.interview.year,
-    season: payload.interview.season,
-    isOnCampus: payload.interview.isOnCampus,
-    source: payload.interview.source ?? null,
-    cgpaCutoff: payload.interview.cgpaCutoff ?? null,
     totalSelected: payload.interview.totalSelected ?? null,
-    candidateCgpa: payload.interview.candidateCgpa ?? null,
-    candidateBranch: payload.interview.candidateBranch ?? null,
-    candidateGradYear: payload.interview.candidateGradYear ?? null,
-    candidateBackground: payload.interview.candidateBackground ?? null,
-    finalOutcome: payload.interview.finalOutcome,
     biggestTip: payload.interview.biggestTip ?? null,
   } satisfies Omit<
     Prisma.InterviewCreateInput,
@@ -141,16 +89,76 @@ export async function createInterviewTree(
 ): Promise<{ id: string }> {
   const companyId = await resolveCompanyId(tx, payload.company);
 
-  const created = await tx.interview.create({
+  let roleLevelId = payload.interview.roleLevelId;
+  if (roleLevelId === "__new__" && payload.interview.roleLevelName) {
+    roleLevelId = await getOrCreateRoleLevelId(
+      tx,
+      payload.interview.roleLevelName,
+    );
+  }
+
+  const interview = await tx.interview.create({
     data: {
-      ...interviewCoreData(payload, companyId, userId),
-      rounds: { create: buildRoundsCreate(payload) },
+      ...interviewCoreData(payload, companyId, roleLevelId, userId),
       assets: { create: interviewLevelAssets(payload.assets) },
     },
     select: { id: true },
   });
 
-  return created;
+  for (let rIndex = 0; rIndex < payload.rounds.length; rIndex++) {
+    const round = payload.rounds[rIndex];
+    const createdRound = await tx.round.create({
+      data: {
+        roundNumber: rIndex + 1,
+        roundName: round.roundName,
+        roundType: round.roundType,
+        durationMinutes: round.durationMinutes ?? null,
+        mode: round.mode,
+        numInterviewers: round.numInterviewers ?? null,
+        interviewStyle: round.interviewStyle ?? null,
+        outcome: round.outcome,
+        keyLearnings: round.keyLearnings ?? null,
+        interviewId: interview.id,
+        assets: { create: assetsForRound(payload.assets, rIndex) },
+      },
+    });
+
+    for (let tcIndex = 0; tcIndex < round.topicCoverages.length; tcIndex++) {
+      const coverage = round.topicCoverages[tcIndex];
+      const createdCoverage = await tx.topicCoverage.create({
+        data: {
+          roundId: createdRound.id,
+          topicAreaId: coverage.topicAreaId,
+          subTopicCount: coverage.subTopicCount,
+          orderIndex: tcIndex,
+        },
+      });
+
+      for (let entryIndex = 0; entryIndex < coverage.entries.length; entryIndex++) {
+        const entry = coverage.entries[entryIndex];
+        let subTopicId = entry.subTopicId;
+        if (subTopicId === "__new__" && entry.subTopicName) {
+          subTopicId = await getOrCreateSubTopicId(
+            tx,
+            entry.subTopicName,
+            coverage.topicAreaId,
+          );
+        }
+
+        await tx.subTopicEntry.create({
+          data: {
+            topicCoverageId: createdCoverage.id,
+            subTopicId,
+            orderIndex: entryIndex,
+            exactQuestionText: entry.exactQuestionText || null,
+            referenceUrl: entry.referenceUrl || null,
+          },
+        });
+      }
+    }
+  }
+
+  return interview;
 }
 
 export async function replaceInterviewTree(
@@ -161,18 +169,76 @@ export async function replaceInterviewTree(
 ): Promise<void> {
   const companyId = await resolveCompanyId(tx, payload.company);
 
-  // Cascade is configured Round -> Interview, Question -> Round, and
-  // QuestionTopic -> Question, so deleting the rounds wipes the entire
-  // nested tree (questions, question-topic joins, and round-level assets).
+  let roleLevelId = payload.interview.roleLevelId;
+  if (roleLevelId === "__new__" && payload.interview.roleLevelName) {
+    roleLevelId = await getOrCreateRoleLevelId(
+      tx,
+      payload.interview.roleLevelName,
+    );
+  }
+
+  // Cascades on delete handles nested Round children.
   await tx.round.deleteMany({ where: { interviewId: id } });
   await tx.asset.deleteMany({ where: { interviewId: id } });
 
   await tx.interview.update({
     where: { id },
     data: {
-      ...interviewCoreData(payload, companyId, userId),
-      rounds: { create: buildRoundsCreate(payload) },
+      ...interviewCoreData(payload, companyId, roleLevelId, userId),
       assets: { create: interviewLevelAssets(payload.assets) },
     },
   });
+
+  for (let rIndex = 0; rIndex < payload.rounds.length; rIndex++) {
+    const round = payload.rounds[rIndex];
+    const createdRound = await tx.round.create({
+      data: {
+        roundNumber: rIndex + 1,
+        roundName: round.roundName,
+        roundType: round.roundType,
+        durationMinutes: round.durationMinutes ?? null,
+        mode: round.mode,
+        numInterviewers: round.numInterviewers ?? null,
+        interviewStyle: round.interviewStyle ?? null,
+        outcome: round.outcome,
+        keyLearnings: round.keyLearnings ?? null,
+        interviewId: id,
+        assets: { create: assetsForRound(payload.assets, rIndex) },
+      },
+    });
+
+    for (let tcIndex = 0; tcIndex < round.topicCoverages.length; tcIndex++) {
+      const coverage = round.topicCoverages[tcIndex];
+      const createdCoverage = await tx.topicCoverage.create({
+        data: {
+          roundId: createdRound.id,
+          topicAreaId: coverage.topicAreaId,
+          subTopicCount: coverage.subTopicCount,
+          orderIndex: tcIndex,
+        },
+      });
+
+      for (let entryIndex = 0; entryIndex < coverage.entries.length; entryIndex++) {
+        const entry = coverage.entries[entryIndex];
+        let subTopicId = entry.subTopicId;
+        if (subTopicId === "__new__" && entry.subTopicName) {
+          subTopicId = await getOrCreateSubTopicId(
+            tx,
+            entry.subTopicName,
+            coverage.topicAreaId,
+          );
+        }
+
+        await tx.subTopicEntry.create({
+          data: {
+            topicCoverageId: createdCoverage.id,
+            subTopicId,
+            orderIndex: entryIndex,
+            exactQuestionText: entry.exactQuestionText || null,
+            referenceUrl: entry.referenceUrl || null,
+          },
+        });
+      }
+    }
+  }
 }

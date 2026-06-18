@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { QuestionCategory } from "@prisma/client";
 
 import {
   Card,
@@ -18,8 +17,6 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-const ALL_CATEGORIES = Object.values(QuestionCategory);
-
 export default async function DbCheckPage() {
   const supabase = await createClient();
   const {
@@ -31,29 +28,21 @@ export default async function DbCheckPage() {
   }
 
   const [
-    topicTotal,
-    topicsGrouped,
-    sampleTopicsRaw,
+    topicAreaTotal,
+    subTopicTotal,
+    subTopicEntryTotal,
     companies,
     flags,
     userTotal,
     currentUser,
     interviewCount,
     roundCount,
-    questionCount,
     assetCount,
     bookmarkCount,
   ] = await Promise.all([
-    prisma.topic.count(),
-    prisma.topic.groupBy({
-      by: ["category"],
-      _count: { _all: true },
-      orderBy: { category: "asc" },
-    }),
-    prisma.topic.findMany({
-      select: { name: true, slug: true, category: true },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-    }),
+    prisma.topicArea.count(),
+    prisma.subTopic.count(),
+    prisma.subTopicEntry.count(),
     prisma.company.findMany({
       select: { id: true, name: true, slug: true },
       orderBy: { name: "asc" },
@@ -65,21 +54,9 @@ export default async function DbCheckPage() {
       : Promise.resolve(null),
     prisma.interview.count(),
     prisma.round.count(),
-    prisma.question.count(),
     prisma.asset.count(),
     prisma.bookmark.count(),
   ]);
-
-  const countsByCategory = new Map<string, number>(
-    topicsGrouped.map((g) => [g.category, g._count._all]),
-  );
-
-  const samplesByCategory = new Map<string, string[]>();
-  for (const t of sampleTopicsRaw) {
-    const list = samplesByCategory.get(t.category) ?? [];
-    if (list.length < 5) list.push(t.name);
-    samplesByCategory.set(t.category, list);
-  }
 
   let storageOk = false;
   let storageError: string | null = null;
@@ -102,48 +79,23 @@ export default async function DbCheckPage() {
       <header>
         <h1 className="text-2xl font-semibold">DB & Storage diagnostic</h1>
         <p className="text-muted-foreground text-sm">
-          Throwaway page that proves every model is queryable and the storage
+          Diagnostic page that proves every model is queryable and the storage
           bucket is reachable. Read-only.
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>Topics</CardTitle>
+          <CardTitle>Taxonomy Stats</CardTitle>
           <CardDescription>
-            Controlled vocabulary keyed by category.
+            High-level topic areas and granular sub-topic concepts.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Stat label="Total topics" value={topicTotal} />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {ALL_CATEGORIES.map((cat) => {
-              const count = countsByCategory.get(cat) ?? 0;
-              const samples = samplesByCategory.get(cat) ?? [];
-              return (
-                <div
-                  key={cat}
-                  className="rounded-md border p-3 text-sm"
-                  data-testid={`topic-cat-${cat}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{cat}</span>
-                    <span className="text-muted-foreground font-mono">
-                      {count}
-                    </span>
-                  </div>
-                  {samples.length > 0 ? (
-                    <ul className="text-muted-foreground mt-2 space-y-1">
-                      {samples.map((name) => (
-                        <li key={name}>· {name}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-muted-foreground mt-2 italic">empty</p>
-                  )}
-                </div>
-              );
-            })}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Stat label="Total topic areas" value={topicAreaTotal} />
+            <Stat label="Total sub-topics" value={subTopicTotal} />
+            <Stat label="Total sub-topic entries" value={subTopicEntryTotal} />
           </div>
         </CardContent>
       </Card>
@@ -156,7 +108,7 @@ export default async function DbCheckPage() {
         <CardContent>
           <Stat label="Total companies" value={companies.length} />
           <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {companies.map((c) => (
+            {companies.map((c: { id: string; name: string; slug: string }) => (
               <div
                 key={c.id}
                 className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
@@ -175,7 +127,7 @@ export default async function DbCheckPage() {
         </CardHeader>
         <CardContent>
           <dl className="space-y-2 text-sm">
-            {flags.map((f) => (
+            {flags.map((f: { key: string; enabled: boolean; description: string | null }) => (
               <div
                 key={f.key}
                 className="flex items-start justify-between gap-4 rounded-md border px-3 py-2"
@@ -233,16 +185,15 @@ export default async function DbCheckPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Interviews / Rounds / Questions / Assets / Bookmarks</CardTitle>
+          <CardTitle>Interviews / Rounds / Assets / Bookmarks</CardTitle>
           <CardDescription>
-            Zeros are expected for now — the wizard lands in Step 3.
+            General platform metrics.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Interviews" value={interviewCount} />
             <Stat label="Rounds" value={roundCount} />
-            <Stat label="Questions" value={questionCount} />
             <Stat label="Assets" value={assetCount} />
             <Stat label="Bookmarks" value={bookmarkCount} />
           </dl>

@@ -32,14 +32,27 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isProtected = path.startsWith("/admin");
+  const isAdminPath = path.startsWith("/admin");
+  const isAuthPage = path === "/login" || path === "/signup";
 
-  if (!user && isProtected) {
+  // Logged-in users on the auth pages → bounce to /dashboard
+  if (user && isAuthPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Anonymous users on /admin/* → bounce to /login with ?next=
+  if (!user && isAdminPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", path);
     return NextResponse.redirect(url);
   }
 
+  // Surface current path to server components via header so requireUser()
+  // can build a ?next= redirect.
+  supabaseResponse.headers.set("x-pathname", path);
   return supabaseResponse;
 }

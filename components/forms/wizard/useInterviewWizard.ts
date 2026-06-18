@@ -40,7 +40,7 @@ export function useInterviewWizardForm({
 
   const hasHydratedRef = useRef(false);
 
-  // Restore draft on mount (create mode only).
+  // Restore draft on mount (create mode only — edit/import-review use provided initialValues).
   useEffect(() => {
     if (hasHydratedRef.current) return;
     hasHydratedRef.current = true;
@@ -70,9 +70,13 @@ export function useInterviewWizardForm({
   return form;
 }
 
-export function useWizardNavigation(form: ReturnType<typeof useInterviewWizardForm>) {
-  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
-  const [maxStepReached, setMaxStepReached] = useState<WizardStep>(1);
+export function useWizardNavigation(
+  form: ReturnType<typeof useInterviewWizardForm>,
+  options: { initialStep?: WizardStep } = {},
+) {
+  const initial = options.initialStep ?? 1;
+  const [currentStep, setCurrentStep] = useState<WizardStep>(initial);
+  const [maxStepReached, setMaxStepReached] = useState<WizardStep>(initial);
 
   const validateStep = useCallback(
     async (step: WizardStep): Promise<boolean> => {
