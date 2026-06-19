@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 
 interface GetCompaniesListFilters {
@@ -61,6 +62,8 @@ export async function getCompaniesList({
   }
 
   const companies = await prisma.company.findMany({
+    // Single SQL JOIN instead of separate relation queries → one DB round-trip.
+    relationLoadStrategy: "join",
     where: whereClause,
     take: limit + 1, // Get one extra to check if there is a next page
     cursor: cursor ? { id: cursor } : undefined,
@@ -129,20 +132,35 @@ export async function getCompaniesList({
   };
 }
 
-export async function getFilterMetadata() {
-  const [roleLevels, yearsData] = await Promise.all([
-    prisma.roleLevel.findMany({
-      orderBy: { name: "asc" },
-    }),
-    prisma.interview.findMany({
-      select: { year: true },
-      distinct: ["year"],
-      orderBy: { year: "desc" },
-    }),
-  ]);
+// Role levels and the distinct year list change rarely, so we cache them across
+// requests (5 min window + tag invalidation) to keep them off the page's hot path.
+export const getFilterMetadata = unstable_cache(
+  async () => {
+    const [roleLevels, yearsData] = await Promise.all([
+      prisma.roleLevel.findMany({
+        orderBy: { name: "asc" },
+      }),
+      prisma.interview.findMany({
+        select: { year: true },
+        distinct: ["year"],
+        orderBy: { year: "desc" },
+      }),
+    ]);
 
-  return {
-    roleLevels,
-    years: yearsData.map((y) => y.year),
-  };
-}
+    return {
+      roleLevels,
+      years: yearsData.map((y) => y.year),
+    };
+  },
+  ["companies-filter-metadata"],
+  { revalidate: 300, tags: ["filter-metadata"] },
+);
+
+// Feature flags rarely change; cache so the flag read drops out of the hot path.
+// Invalidated immediately by toggleFeatureFlag() via revalidateTag("feature-flags").
+export const getFeatureFlag = (key: string) =>
+  unstable_cache(
+    async () => prisma.featureFlag.findUnique({ where: { key } }),
+    ["feature-flag", key],
+    { revalidate: 300, tags: ["feature-flags"] },
+  )();

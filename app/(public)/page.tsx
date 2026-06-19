@@ -74,6 +74,7 @@ async function RecentExperiencesRowAsync() {
 
 async function FeaturedCompaniesRowAsync() {
   const featuredCompaniesRaw = await prisma.company.findMany({
+    relationLoadStrategy: "join",
     take: 8,
     include: {
       _count: { select: { interviews: true } },

@@ -1,4 +1,4 @@
-import { getCompaniesList, getFilterMetadata } from "@/lib/queries/companies-list";
+import { getCompaniesList, getFilterMetadata, getFeatureFlag } from "@/lib/queries/companies-list";
 import { CompaniesFilterBar } from "@/components/public/CompaniesFilterBar";
 import { CompanyCard } from "@/components/public/CompanyCard";
 import { EmptyState } from "@/components/public/EmptyState";
@@ -7,7 +7,6 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { prisma } from "@/lib/db";
 import { getCurrentDbUser } from "@/lib/auth/guards";
 import { UserRole } from "@prisma/client";
 
@@ -35,9 +34,7 @@ interface CompaniesPageProps {
 export default async function CompaniesPage({ searchParams }: CompaniesPageProps) {
   const [filterMetadata, profileFilterFlag] = await Promise.all([
     getFilterMetadata(),
-    prisma.featureFlag.findUnique({
-      where: { key: "show_candidate_profile_filter" },
-    }),
+    getFeatureFlag("show_candidate_profile_filter"),
   ]);
   const showProfileFilter = profileFilterFlag?.enabled ?? false;
 

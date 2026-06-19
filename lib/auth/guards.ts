@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { User, UserRole } from "@prisma/client";
@@ -19,16 +20,20 @@ export class ForbiddenError extends Error {
   }
 }
 
-export async function getCurrentDbUser(): Promise<User | null> {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+// Memoized per request: multiple callers in one render share a single
+// auth check + user lookup instead of repeating the round-trips.
+export const getCurrentDbUser = cache(
+  async (): Promise<User | null> => {
+    const supabase = await createClient();
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
 
-  if (!authUser?.email) return null;
+    if (!authUser?.email) return null;
 
-  return prisma.user.findUnique({ where: { email: authUser.email } });
-}
+    return prisma.user.findUnique({ where: { email: authUser.email } });
+  },
+);
 
 /** Alias matching Step 7 spec naming. */
 export const getCurrentUser = getCurrentDbUser;

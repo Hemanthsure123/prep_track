@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -23,6 +23,7 @@ export async function toggleFeatureFlag(
     create: { key, enabled },
   });
 
+  revalidateTag("feature-flags");
   revalidatePath("/admin/feature-flags");
   revalidatePath("/companies");
   return { ok: true } as const;
