@@ -15,11 +15,13 @@ interface TopicAreaHighlightsProps {
 }
 
 const AREA_THEMES: Record<string, { icon: any; color: string }> = {
-  "dsa-medium": { icon: Code2, color: "text-amber-600 bg-amber-500/10 border-amber-500/20" },
-  "dsa-hard": { icon: Code2, color: "text-rose-600 bg-rose-500/10 border-rose-500/20" },
+  "dsa-easy": { icon: Code2, color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" },
+  "dsa-medium-hard": { icon: Code2, color: "text-rose-600 bg-rose-500/10 border-rose-500/20" },
   "system-design": { icon: Cpu, color: "text-blue-600 bg-blue-500/10 border-blue-500/20" },
-  "frontend-fundamentals": { icon: LayoutTemplate, color: "text-teal-600 bg-teal-500/10 border-teal-500/20" },
-  "backend-api": { icon: Database, color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20" },
+  "frontend-concepts": { icon: LayoutTemplate, color: "text-teal-600 bg-teal-500/10 border-teal-500/20" },
+  "frontend-coding": { icon: LayoutTemplate, color: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20" },
+  "backend-concepts": { icon: Database, color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20" },
+  "backend-coding": { icon: Database, color: "text-violet-600 bg-violet-500/10 border-violet-500/20" },
 };
 
 export function TopicAreaHighlights({ topicAreas }: TopicAreaHighlightsProps) {
@@ -43,6 +45,12 @@ export function TopicAreaHighlights({ topicAreas }: TopicAreaHighlightsProps) {
               We group hundreds of raw interview questions into standard core topic areas.
             </p>
           </div>
+          <Link
+            href="/topic-areas"
+            className="mt-3 md:mt-0 inline-flex items-center gap-1 text-xs font-extrabold text-primary hover:text-foreground transition-colors whitespace-nowrap"
+          >
+            View all topics <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
 
         {/* Highlights Grid */}
@@ -57,7 +65,7 @@ export function TopicAreaHighlights({ topicAreas }: TopicAreaHighlightsProps) {
             return (
               <Link
                 key={area.id}
-                href={`/companies`}
+                href={`/topic-areas/${area.slug}`}
                 className="group relative flex flex-col justify-between h-full bg-background rounded-lg border border-border p-5 hover:shadow-sm hover:scale-[1.01] transition-all duration-200 cursor-pointer overflow-hidden"
               >
                 <div className="space-y-4">

@@ -100,3 +100,36 @@ export async function MarkdownRenderer({
     />
   );
 }
+
+/**
+ * Lightweight Markdown renderer WITHOUT Shiki syntax highlighting.
+ * Use for high-volume lists (e.g. the topic-area question explorer) where the
+ * per-item Shiki cost (and its multi-second cold start) would dominate latency.
+ */
+export async function MarkdownRendererPlain({
+  content,
+  className,
+}: {
+  content: string;
+  className?: string;
+}) {
+  if (!content || content.trim().length === 0) return null;
+
+  let html: string;
+  try {
+    html = await compilePlain(content);
+  } catch {
+    html = `<pre class="whitespace-pre-wrap">${escapeHtml(content)}</pre>`;
+  }
+
+  return (
+    <div
+      className={cn(
+        "prose prose-slate dark:prose-invert max-w-none text-sm",
+        "prose-pre:rounded-md prose-pre:border prose-pre:bg-muted prose-pre:p-3",
+        className,
+      )}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
