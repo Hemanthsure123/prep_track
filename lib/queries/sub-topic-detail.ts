@@ -2,19 +2,30 @@
 import { prisma } from "@/lib/db";
 
 export async function getSubTopicDetail(slug: string) {
-  // 1. Fetch the main subtopic details and its parent topic area
-  const subTopic = await prisma.subTopic.findFirst({
+  // 1. A concept slug (e.g. "dynamic-programming") can exist as several SubTopic
+  // rows — one per topic area it appears in (DSA Easy, DSA Medium-Hard, …).
+  // Fetch ALL rows with this slug and aggregate across them, otherwise we'd
+  // undercount the companies/interviews that asked the concept.
+  const subTopicRows = await prisma.subTopic.findMany({
     where: { slug },
     include: {
       topicArea: true,
+      _count: { select: { entries: true } },
     },
   });
 
-  if (!subTopic) return null;
+  if (subTopicRows.length === 0) return null;
 
-  // 2. Fetch all entries referencing this subtopic to calculate stats and list coverages
+  // Representative row (most entries) drives the title + area badge.
+  const subTopic = subTopicRows.reduce((a, b) =>
+    b._count.entries > a._count.entries ? b : a,
+  );
+  const subTopicIds = subTopicRows.map((s) => s.id);
+
+  // 2. Fetch all entries across every same-slug row to calculate stats/coverages
   const entries = await prisma.subTopicEntry.findMany({
-    where: { subTopicId: subTopic.id },
+    relationLoadStrategy: "join",
+    where: { subTopicId: { in: subTopicIds } },
     include: {
       topicCoverage: {
         include: {
@@ -88,11 +99,11 @@ export async function getSubTopicDetail(slug: string) {
     count: c.interviews.size,
   })).sort((a, b) => b.count - a.count);
 
-  // 4. Fetch sibling subtopics in the same TopicArea to display a "related cloud"
+  // 4. Fetch sibling subtopics in the representative TopicArea ("related cloud")
   const siblingSubTopics = await prisma.subTopic.findMany({
     where: {
       topicAreaId: subTopic.topicAreaId,
-      id: { not: subTopic.id },
+      id: { notIn: subTopicIds },
     },
     include: {
       _count: {
